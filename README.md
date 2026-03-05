@@ -1,205 +1,155 @@
 # Professional Internship Backend API
 
-ระบบ Backend สำหรับบริหารจัดการฝึกงานนักศึกษา พัฒนาด้วย **Node.js + Express + MySQL**
+ระบบ Backend สำหรับบริหารจัดการฝึกงานนักศึกษา พัฒนาด้วย **Node.js + Express + MySQL** โดยรวมทุก business logic ไว้ใน `src/server.js` ไฟล์เดียว พร้อมสคริปต์ช่วยสร้างฐานข้อมูลและข้อมูลตัวอย่างสำหรับใช้งานทันที
 
-## โครงสร้างโปรเจค
+## Highlights
+
+- ⚙️ RESTful API ครอบคลุมการจัดการผู้ใช้ คำร้อง ขออนุมัติ เช็คชื่อ และการชำระเงิน
+- 🗄️ ใช้ `mysql2/promise` สร้าง connection pool รองรับพร้อมกันหลายคำขอ
+- 🔐 JWT Authentication + Role-based Authorization (student, company, advisor, admin)
+- 🚀 `npm run db:init` สร้างฐานข้อมูล `internship_db` และ seed บัญชีตัวอย่างให้อัตโนมัติ
+- 🌐 Endpoint สุขภาพ `/api/health` ตรวจสอบสถานะการทำงานของเซิร์ฟเวอร์ได้ทันที
+
+## โครงสร้างโปรเจกต์
 
 ```
-src/
-├── config/
-│   └── db.js                 # MySQL connection pool
-├── controllers/
-│   ├── authController.js     # Login, Register, Profile
-│   ├── userController.js     # CRUD ผู้ใช้ (Admin)
-│   ├── studentController.js  # จัดการนักศึกษา
-│   ├── companyController.js  # จัดการบริษัท
-│   ├── advisorController.js  # จัดการอาจารย์ที่ปรึกษา
-│   ├── requestController.js  # คำร้องขอฝึกงาน
-│   ├── checkinController.js  # เช็คชื่อรายวัน
-│   ├── paymentController.js  # การชำระเงิน
-│   └── notificationController.js
-├── database/
-│   ├── schema.sql            # SQL สร้างตาราง
-│   ├── seed.sql              # ข้อมูลตัวอย่าง
-│   └── init.js               # Script สร้าง DB อัตโนมัติ
-├── middleware/
-│   ├── auth.js               # JWT authentication & authorization
-│   ├── errorHandler.js       # Global error handler
-│   └── validate.js           # Request validation
-├── models/
-│   ├── User.js
-│   ├── Student.js
-│   ├── Company.js
-│   ├── Advisor.js
-│   ├── Request.js
-│   ├── DailyCheckin.js
-│   ├── Payment.js
-│   └── Notification.js
-├── routes/
-│   ├── authRoutes.js
-│   ├── userRoutes.js
-│   ├── studentRoutes.js
-│   ├── companyRoutes.js
-│   ├── advisorRoutes.js
-│   ├── requestRoutes.js
-│   ├── checkinRoutes.js
-│   ├── paymentRoutes.js
-│   └── notificationRoutes.js
-└── server.js                 # Entry point
+├── .env.example            # ตัวอย่าง environment variables
+├── package.json
+└── src/
+    ├── database/
+    │   ├── init.js        # สคริปต์สร้าง DB + seed ข้อมูล
+    │   ├── schema.sql     # คำสั่งสร้างตารางทั้งหมด
+    │   └── seed.sql       # (ออปชัน) สำหรับเติมข้อมูลเพิ่ม
+    └── server.js          # Express server (รวม middleware + routes)
 ```
 
-## ติดตั้งและเริ่มต้น
+> หมายเหตุ: โฟลเดอร์ controllers/models/middleware ถูกยุบรวมมาอยู่ใน `server.js` เพื่อลดความซับซ้อนและง่ายต่อการ deploy
 
-### 1. ติดตั้ง Dependencies
+## ความต้องการระบบ
+
+- Node.js 18+ (แนะนำ LTS)
+- MySQL 8.x (หรือ MariaDB ที่รองรับ `utf8mb4`)
+
+## การติดตั้งและเริ่มต้นใช้งาน
+
+### 1. ติดตั้ง dependencies
 
 ```bash
 npm install
 ```
 
-### 2. ตั้งค่า Environment
+### 2. ตั้งค่า Environment Variables
 
-คัดลอก `.env.example` เป็น `.env` แล้วแก้ไขค่าต่างๆ:
+คัดลอกไฟล์ตัวอย่างและปรับค่าที่ต้องการ
 
 ```bash
 cp .env.example .env
 ```
 
-แก้ไข `.env`:
-```
-DB_HOST=localhost
-DB_PORT=3306
-DB_USER=root
-DB_PASSWORD=your_password_here
-DB_NAME=internship_db
-JWT_SECRET=your_secret_key
-```
+| ตัวแปร | ค่าเริ่มต้น | รายละเอียด |
+|---------|-------------|-------------|
+| `PORT` | 5000 | พอร์ตที่ Express ใช้งาน |
+| `NODE_ENV` | development | โหมดรัน (development / production) |
+| `DB_HOST` | localhost | ที่อยู่เซิร์ฟเวอร์ MySQL |
+| `DB_PORT` | 3306 | พอร์ต MySQL |
+| `DB_USER` | root | ชื่อผู้ใช้ฐานข้อมูล |
+| `DB_PASSWORD` | your_password_here | รหัสผ่านฐานข้อมูล |
+| `DB_NAME` | internship_db | ชื่อฐานข้อมูลหลัก |
+| `JWT_SECRET` | your_jwt_secret_key_here | คีย์สำหรับเซ็น JWT |
+| `JWT_EXPIRES_IN` | 7d | ระยะเวลาหมดอายุของโทเคน |
 
-### 3. สร้างฐานข้อมูล
+### 3. สร้างฐานข้อมูลและ seed ข้อมูลเริ่มต้น
 
 ```bash
 npm run db:init
 ```
 
 คำสั่งนี้จะ:
-- สร้าง database `internship_db`
-- สร้างตารางทั้งหมด (8 ตาราง)
-- สร้าง Admin เริ่มต้น (admin@internship.com / admin123)
+1. สร้างฐานข้อมูล `internship_db`
+2. สร้างตารางทั้งหมดตาม `schema.sql`
+3. เพิ่มบัญชีทดสอบ เช่น `admin / admin123`, `advisor / password`, `student1 / password`, ฯลฯ
 
 ### 4. รันเซิร์ฟเวอร์
 
 ```bash
-# Development (auto-reload)
+# Development (hot reload ด้วย nodemon)
 npm run dev
 
 # Production
 npm start
 ```
 
-เซิร์ฟเวอร์จะรันที่ `http://localhost:5000`
+ค่าเริ่มต้นเซิร์ฟเวอร์จะพร้อมใช้งานที่ `http://localhost:5000`
 
----
+## สคริปต์ npm
 
-## ฐานข้อมูล (8 ตาราง)
+| คำสั่ง | รายละเอียด |
+|---------|-------------|
+| `npm run dev` | รันเซิร์ฟเวอร์ด้วย nodemon ระหว่างพัฒนา |
+| `npm start` | รันเซิร์ฟเวอร์ด้วย Node.js ปกติ |
+| `npm run db:init` | เรียก `src/database/init.js` เพื่อสร้าง/รีเซ็ตฐานข้อมูล |
 
-| ตาราง | คำอธิบาย |
-|-------|---------|
-| `users` | ผู้ใช้งานทั้งหมด (4 บทบาท: student, company, advisor, admin) |
-| `students` | ข้อมูลนักศึกษา (รหัส, สาขา, สถานะฝึกงาน) |
-| `companies` | ข้อมูลบริษัท (ชื่อ, ที่อยู่, จำนวนรับ) |
-| `advisors` | ข้อมูลอาจารย์ที่ปรึกษา |
-| `requests` | คำร้องขอฝึกงาน |
-| `daily_checkins` | เช็คชื่อรายวัน |
-| `payments` | การชำระเงิน |
-| `notifications` | แจ้งเตือน |
+## โครงสร้างฐานข้อมูล (สรุป)
 
----
+| ตาราง | จุดประสงค์หลัก |
+|-------|-----------------|
+| `users` | เก็บข้อมูลบัญชีทุกบทบาท พร้อมสถานะ `is_active` |
+| `requests` | คำร้องฝึกงานของนักศึกษา + สถานะภาษาไทย + comment admin/advisor |
+| `daily_checkins` | บันทึกการเช็คชื่อรายวัน (พร้อม unique key student/date) |
+| `payment_proofs` | หลักฐานการชำระเงิน + สถานะ `pending/approved/rejected` |
 
-## API Endpoints
+รายละเอียดคอลัมน์ทั้งหมดดูได้จาก `src/database/schema.sql`
 
-### Authentication
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| POST | `/api/auth/login` | เข้าสู่ระบบ | Public |
-| POST | `/api/auth/register` | สมัครสมาชิก | Public |
-| GET | `/api/auth/me` | ดูข้อมูลตัวเอง | All |
-| PUT | `/api/auth/change-password` | เปลี่ยนรหัสผ่าน | All |
+## ภาพรวม API (สกัดจาก `server.js`)
 
-### Users (Admin only)
-| Method | Endpoint | คำอธิบาย |
-|--------|----------|---------|
-| GET | `/api/users` | ดูผู้ใช้ทั้งหมด |
-| GET | `/api/users/:id` | ดูผู้ใช้ตาม ID |
-| PUT | `/api/users/:id` | แก้ไขผู้ใช้ |
-| DELETE | `/api/users/:id` | ลบผู้ใช้ |
-| PATCH | `/api/users/:id/toggle-active` | เปิด/ปิดการใช้งาน |
+| หมวด | Endpoint | Method | สิทธิ์ |
+|-------|----------|--------|--------|
+| Health | `/api/health` | GET | Public |
+| Public Catalog | `/api/public/companies` | GET | Public |
+| Auth | `/api/auth/login` | POST | Public |
+| Auth | `/api/auth/me` | GET | ผู้ใช้ที่มีโทเคน |
+| Users | `/api/users` | GET | Authenticated (กรองได้ตาม role/department) |
+| Users | `/api/users/:id` | GET | Authenticated |
+| Users | `/api/users` | POST | Admin |
+| Users | `/api/users/import` | POST | Admin |
+| Users | `/api/users/:id` | PUT | เจ้าของข้อมูลหรือ Admin (ตรวจก่อนใน client) |
+| Users | `/api/users/:id` | DELETE | Admin |
+| Requests | `/api/requests` | GET | Authenticated |
+| Requests | `/api/requests/:id` | GET | Authenticated |
+| Requests | `/api/requests` | POST | Authenticated |
+| Requests | `/api/requests/:id/status` | PATCH | Authenticated (ตรวจบทบาท server-side) |
+| Requests | `/api/requests/:id` | DELETE | Authenticated |
+| Checkins | `/api/checkins` | GET | Authenticated |
+| Checkins | `/api/checkins/:id` | GET | Authenticated |
+| Checkins | `/api/checkins` | POST | Authenticated |
+| Checkins | `/api/checkins/:id` | DELETE | Authenticated |
+| Payments | `/api/payments` | GET | Authenticated |
+| Payments | `/api/payments/:id` | GET | Authenticated |
+| Payments | `/api/payments` | POST | Authenticated |
+| Payments | `/api/payments/:id/approve` | PATCH | Authenticated (ควรจำกัด admin ใน client) |
+| Payments | `/api/payments/:id/reject` | PATCH | Authenticated |
 
-### Students
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| GET | `/api/students` | ดูนักศึกษาทั้งหมด | Admin, Advisor |
-| GET | `/api/students/me` | ดูข้อมูลตัวเอง | Student |
-| GET | `/api/students/departments` | ดูรายชื่อสาขา | All |
-| GET | `/api/students/:id` | ดูนักศึกษาตาม ID | Admin, Advisor, Company |
-| PUT | `/api/students/:id` | แก้ไขข้อมูล | Admin |
-
-### Companies
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| GET | `/api/companies` | ดูบริษัททั้งหมด | All (logged in) |
-| GET | `/api/companies/me` | ดูข้อมูลบริษัทตัวเอง | Company |
-| GET | `/api/companies/:id` | ดูบริษัทตาม ID | All (logged in) |
-| PUT | `/api/companies/:id` | แก้ไขข้อมูล | Admin, Company |
-| PATCH | `/api/companies/:id/verify` | ยืนยันบริษัท | Admin |
-
-### Advisors
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| GET | `/api/advisors` | ดูอาจารย์ทั้งหมด | Admin |
-| GET | `/api/advisors/me` | ดูข้อมูลตัวเอง | Advisor |
-| GET | `/api/advisors/me/students` | ดูนักศึกษาที่ดูแล | Advisor |
-
-### Requests (คำร้อง)
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| GET | `/api/requests` | ดูคำร้องทั้งหมด | Admin, Advisor |
-| GET | `/api/requests/me` | ดูคำร้องของตัวเอง | Student |
-| GET | `/api/requests/summary` | สรุปสถานะคำร้อง | Admin |
-| POST | `/api/requests` | ส่งคำร้อง | Student |
-| PATCH | `/api/requests/:id/status` | อัปเดตสถานะ | Admin, Advisor |
-
-### Check-ins (เช็คชื่อ)
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| GET | `/api/checkins` | ดูเช็คชื่อทั้งหมด | Admin, Advisor, Company |
-| GET | `/api/checkins/summary` | ภาพรวมรายบุคคล | Admin |
-| GET | `/api/checkins/summary/:studentId` | สรุปของนักศึกษา | Admin, Advisor, Student |
-| POST | `/api/checkins` | เช็คชื่อ (นักศึกษา) | Student |
-| POST | `/api/checkins/admin` | บันทึกเช็คชื่อ (Admin) | Admin |
-| PATCH | `/api/checkins/:id/checkout` | เช็คเอาท์ | Student, Company |
-
-### Payments (การชำระเงิน)
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| GET | `/api/payments` | ดูทั้งหมด | Admin |
-| GET | `/api/payments/me` | ดูของตัวเอง | Student |
-| POST | `/api/payments` | ส่งหลักฐาน | Student |
-| PATCH | `/api/payments/:id/verify` | ตรวจสอบ | Admin |
-
-### Notifications (แจ้งเตือน)
-| Method | Endpoint | คำอธิบาย | สิทธิ์ |
-|--------|----------|---------|-------|
-| GET | `/api/notifications` | ดูแจ้งเตือน | All |
-| PATCH | `/api/notifications/:id/read` | อ่านแจ้งเตือน | All |
-| PATCH | `/api/notifications/read-all` | อ่านทั้งหมด | All |
-
----
+> หมายเหตุ: แต่ละ endpoint มีการตรวจสอบสิทธิ์จริงผ่าน middleware `authenticate` และ `authorize` ภายใน `server.js` คุณสามารถปรับบทบาทที่อนุญาตได้ตามความต้องการ
 
 ## Authentication
 
-ใช้ JWT Bearer Token:
+- ใช้ JWT Bearer Token แนบใน Header: `Authorization: Bearer <token>`
+- Token ออกให้ผ่าน `POST /api/auth/login`
+- Middleware `authenticate` จะตรวจสอบโทเคนและแนบข้อมูลผู้ใช้ (`req.user`) ให้ API ถัดไป
+- ฟังก์ชัน `authorize(...roles)` ใช้จำกัดบทบาท (เช่น admin เท่านั้น) ก่อนเข้าถึงบาง endpoint
 
-```
-Authorization: Bearer <token>
-```
+## ข้อมูลสำหรับการทดสอบ (จาก `npm run db:init`)
 
-ได้ token จาก `/api/auth/login` หรือ `/api/auth/register`
+| บทบาท | Username | Password |
+|--------|----------|----------|
+| Admin | `admin` | `admin123` |
+| Advisor | `advisor` | `password` |
+| Student | `student1` / `student2` | `password` |
+| Company | `company1` | `password` |
+
+สามารถแก้ไข/เพิ่มบัญชีเพิ่มเติมได้ภายหลังผ่าน API Users หรือแก้ seed script ตามต้องการ
+
+---
+
+หากมีคำถามเพิ่มเติมหรือพบปัญหาในการใช้งาน โปรดเปิด issue หรือแจ้งผู้ดูแลโครงการ 🙌
+
