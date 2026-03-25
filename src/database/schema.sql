@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS requests (
   details JSON DEFAULT NULL COMMENT 'ข้อมูลรายละเอียดทั้งหมด',
   admin_comment TEXT DEFAULT NULL,
   advisor_comment TEXT DEFAULT NULL,
+  dispatchLetter LONGTEXT DEFAULT NULL COMMENT 'JSON: {fileName, mimeType, dataUrl} หนังสือส่งตัว',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;

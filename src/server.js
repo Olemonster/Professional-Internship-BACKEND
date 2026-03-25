@@ -17,8 +17,8 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 // =============================================
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // =============================================
 // Database Connection Pool
@@ -33,6 +33,7 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
+  maxAllowedPacket: 50 * 1024 * 1024,
 });
 
 // =============================================
@@ -50,6 +51,13 @@ const authenticate = (req, res, next) => {
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Token ไม่ถูกต้องหรือหมดอายุ' });
   }
+};
+
+const parseRequestRow = (row) => {
+  const parsed = { ...row, id: String(row.id) };
+  if (typeof parsed.details === 'string') { try { parsed.details = JSON.parse(parsed.details); } catch (_) {} }
+  if (typeof parsed.dispatchLetter === 'string') { try { parsed.dispatchLetter = JSON.parse(parsed.dispatchLetter); } catch (_) {} }
+  return parsed;
 };
 
 const authorize = (...roles) => (req, res, next) => {
@@ -387,12 +395,44 @@ app.get('/api/requests', authenticate, async (req, res) => {
 
     sql += ' ORDER BY submittedDate DESC';
     const [rows] = await pool.query(sql, params);
-    const data = rows.map((row) => ({
-      ...row,
-      id: String(row.id),
-      details: typeof row.details === 'string' ? JSON.parse(row.details) : row.details,
-    }));
+    const data = rows.map(parseRequestRow);
     res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =============================================
+// PUBLIC Routes (no auth required)
+// =============================================
+
+// GET /api/public/requests/:id
+app.get('/api/public/requests/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+    res.json({ success: true, data: parseRequestRow(rows[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PATCH /api/public/requests/:id/status (for company accept/reject)
+app.patch('/api/public/requests/:id/status', async (req, res) => {
+  try {
+    const { status, company_comment } = req.body;
+    const allowed = ['อนุมัติแล้ว', 'ปฏิเสธ'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ success: false, message: 'สถานะไม่ถูกต้อง' });
+    }
+    const updates = ['status = ?'];
+    const params = [status];
+    if (company_comment !== undefined) { updates.push('company_comment = ?'); params.push(company_comment); }
+    params.push(req.params.id);
+    await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
+    const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!updated[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+    res.json({ success: true, message: 'อัปเดตสถานะคำร้องสำเร็จ', data: parseRequestRow(updated[0]) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -403,11 +443,7 @@ app.get('/api/requests/:id', authenticate, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
-    const row = rows[0];
-    res.json({
-      success: true,
-      data: { ...row, id: String(row.id), details: typeof row.details === 'string' ? JSON.parse(row.details) : row.details }
-    });
+    res.json({ success: true, data: parseRequestRow(rows[0]) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -424,11 +460,7 @@ app.post('/api/requests', authenticate, async (req, res) => {
        submittedDate || new Date(), status || 'รออาจารย์ที่ปรึกษาอนุมัติ', details ? JSON.stringify(details) : null]
     );
     const [newRow] = await pool.query('SELECT * FROM requests WHERE id = ?', [result.insertId]);
-    const row = newRow[0];
-    res.status(201).json({
-      success: true, message: 'ส่งคำร้องสำเร็จ',
-      data: { ...row, id: String(row.id), details: typeof row.details === 'string' ? JSON.parse(row.details) : row.details }
-    });
+    res.status(201).json({ success: true, message: 'ส่งคำร้องสำเร็จ', data: parseRequestRow(newRow[0]) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -437,23 +469,20 @@ app.post('/api/requests', authenticate, async (req, res) => {
 // PATCH /api/requests/:id/status
 app.patch('/api/requests/:id/status', authenticate, async (req, res) => {
   try {
-    const { status, admin_comment, advisor_comment } = req.body;
+    const { status, admin_comment, advisor_comment, dispatchLetter } = req.body;
     const updates = ['status = ?'];
     const params = [status];
 
     if (admin_comment !== undefined) { updates.push('admin_comment = ?'); params.push(admin_comment); }
     if (advisor_comment !== undefined) { updates.push('advisor_comment = ?'); params.push(advisor_comment); }
+    if (dispatchLetter !== undefined) { updates.push('dispatchLetter = ?'); params.push(JSON.stringify(dispatchLetter)); }
 
     params.push(req.params.id);
     await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
 
     const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
     if (!updated[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
-    const row = updated[0];
-    res.json({
-      success: true, message: 'อัปเดตสถานะคำร้องสำเร็จ',
-      data: { ...row, id: String(row.id), details: typeof row.details === 'string' ? JSON.parse(row.details) : row.details }
-    });
+    res.json({ success: true, message: 'อัปเดตสถานะคำร้องสำเร็จ', data: parseRequestRow(updated[0]) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
