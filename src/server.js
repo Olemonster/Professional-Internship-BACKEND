@@ -123,8 +123,26 @@ const addCompanyEntry = (map, entry) => {
 // =============================================
 // Health Check
 // =============================================
-app.get('/api/health', (req, res) => {
-  res.json({ success: true, message: 'API is running', timestamp: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  try {
+    // เช็คการเชื่อมต่อ Database โดยรันคำสั่ง SELECT 1
+    await pool.query('SELECT 1');
+    res.json({ 
+      success: true, 
+      message: 'API and Database are running', 
+      database: 'connected',
+      timestamp: new Date().toISOString() 
+    });
+  } catch (error) {
+    console.error('Database connection error in health check:', error.message);
+    res.status(500).json({ 
+      success: false, 
+      message: 'API is running but Database connection failed', 
+      database: 'disconnected',
+      error: error.message,
+      timestamp: new Date().toISOString() 
+    });
+  }
 });
 
 // =============================================
