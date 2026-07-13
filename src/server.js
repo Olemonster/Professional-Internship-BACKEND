@@ -36,6 +36,9 @@ const pool = mysql.createPool({
   maxAllowedPacket: 50 * 1024 * 1024,
 });
 
+// พยายามเพิ่ม max_allowed_packet อัตโนมัติเผื่อ Database บน Railway ตั้งค่าไว้ต่ำเกินไป (ถ้ามีสิทธิ์ SUPER)
+pool.query('SET GLOBAL max_allowed_packet = 67108864').catch(e => console.log('Notice: Could not set max_allowed_packet (might not have SUPER privilege):', e.message));
+
 // =============================================
 // Auth Middleware
 // =============================================
