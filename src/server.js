@@ -471,11 +471,17 @@ app.get('/api/requests/:id', authenticate, async (req, res) => {
 app.post('/api/requests', authenticate, async (req, res) => {
   try {
     const { studentId, studentName, department, company, position, submittedDate, status, details } = req.body;
+    
+    // แปลงฟอร์แมตวันที่ให้เป็น YYYY-MM-DD HH:mm:ss สำหรับ MySQL
+    const d = submittedDate ? new Date(submittedDate) : new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const formattedDate = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+
     const [result] = await pool.query(
       `INSERT INTO requests (studentId, studentName, department, company, position, submittedDate, status, details)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [studentId, studentName || null, department || null, company || null, position || null,
-       submittedDate || new Date(), status || 'รออาจารย์ที่ปรึกษาอนุมัติ', details ? JSON.stringify(details) : null]
+       formattedDate, status || 'รออาจารย์ที่ปรึกษาอนุมัติ', details ? JSON.stringify(details) : null]
     );
     const [newRow] = await pool.query('SELECT * FROM requests WHERE id = ?', [result.insertId]);
     res.status(201).json({ success: true, message: 'ส่งคำร้องสำเร็จ', data: parseRequestRow(newRow[0]) });
