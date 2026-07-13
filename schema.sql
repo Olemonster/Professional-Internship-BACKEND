@@ -1,68 +1,160 @@
--- =============================================
--- Database Schema สำหรับระบบบริหารจัดการฝึกงาน
--- สร้างจากโครงสร้างที่ถูกใช้งานในไฟล์ server.js
--- =============================================
-
--- 1. ตาราง users (เก็บข้อมูลผู้ใช้งานทั้งหมด)
-CREATE TABLE IF NOT EXISTS `users` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `username` VARCHAR(255) NOT NULL UNIQUE,  -- ใช้เป็นอีเมล
-  `password` VARCHAR(255) NOT NULL,         -- เก็บแบบ Hashed
-  `name` VARCHAR(255) NOT NULL,             -- ชื่อ-นามสกุล / ชื่อบริษัท
-  `role` VARCHAR(50) NOT NULL DEFAULT 'student', -- admin, student, company
-  `studentId` VARCHAR(50) NULL,             -- รหัสนักศึกษา (สำหรับนักศึกษา)
-  `department` VARCHAR(255) NULL,           -- สาขาวิชา
-  `address` TEXT NULL,                      -- ที่อยู่
-  `phone` VARCHAR(50) NULL,                 -- เบอร์โทรศัพท์
-  `contactPerson` VARCHAR(255) NULL,        -- ชื่อผู้ติดต่อ (สำหรับบริษัท)
-  `avatar` VARCHAR(255) NULL,               -- รูปโปรไฟล์
-  `logo` VARCHAR(255) NULL,                 -- โลโก้บริษัท
-  `imageUrl` VARCHAR(255) NULL,             -- รูปภาพบริษัท
-  `businessType` VARCHAR(255) NULL,         -- ประเภทธุรกิจ (สำหรับบริษัท)
-  `is_active` BOOLEAN NOT NULL DEFAULT TRUE,-- สถานะการใช้งานบัญชี
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE `advisor_evaluations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `requestId` int(11) NOT NULL,
+  `advisorName` varchar(255) DEFAULT NULL,
+  `c1` int(11) DEFAULT NULL,
+  `c2` int(11) DEFAULT NULL,
+  `c3` int(11) DEFAULT NULL,
+  `c4` int(11) DEFAULT NULL,
+  `c5` int(11) DEFAULT NULL,
+  `c6` int(11) DEFAULT NULL,
+  `c7` int(11) DEFAULT NULL,
+  `c8` int(11) DEFAULT NULL,
+  `c9` int(11) DEFAULT NULL,
+  `c10` int(11) DEFAULT NULL,
+  `c11` int(11) DEFAULT NULL,
+  `c12` int(11) DEFAULT NULL,
+  `c13` int(11) DEFAULT NULL,
+  `c14` int(11) DEFAULT NULL,
+  `c15` int(11) DEFAULT NULL,
+  `c16` int(11) DEFAULT NULL,
+  `c17` int(11) DEFAULT NULL,
+  `companyComments` text DEFAULT NULL,
+  `s1` int(11) DEFAULT NULL,
+  `s2` int(11) DEFAULT NULL,
+  `s3` int(11) DEFAULT NULL,
+  `s4` int(11) DEFAULT NULL,
+  `s5` int(11) DEFAULT NULL,
+  `s6` int(11) DEFAULT NULL,
+  `s7` int(11) DEFAULT NULL,
+  `s8` int(11) DEFAULT NULL,
+  `s9` int(11) DEFAULT NULL,
+  `s10` int(11) DEFAULT NULL,
+  `s11` int(11) DEFAULT NULL,
+  `s12` int(11) DEFAULT NULL,
+  `s13` int(11) DEFAULT NULL,
+  `s14` int(11) DEFAULT NULL,
+  `s15` int(11) DEFAULT NULL,
+  `s16` int(11) DEFAULT NULL,
+  `s17` int(11) DEFAULT NULL,
+  `s18` int(11) DEFAULT NULL,
+  `s19` int(11) DEFAULT NULL,
+  `s20` int(11) DEFAULT NULL,
+  `studentComments` text DEFAULT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `requestId` (`requestId`),
+  CONSTRAINT `advisor_evaluations_ibfk_1` FOREIGN KEY (`requestId`) REFERENCES `requests` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 2. ตาราง requests (เก็บข้อมูลคำร้องขอฝึกงาน)
-CREATE TABLE IF NOT EXISTS `requests` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `studentId` VARCHAR(50) NOT NULL,         -- รหัสนักศึกษา
-  `studentName` VARCHAR(255) NULL,          -- ชื่อนักศึกษา
-  `department` VARCHAR(255) NULL,           -- สาขาวิชา
-  `company` VARCHAR(255) NULL,              -- ชื่อบริษัทที่ขอฝึกงาน
-  `companyName` VARCHAR(255) NULL,          -- ชื่อบริษัท (ใช้อ้างอิงร่วมกับ company)
-  `position` VARCHAR(255) NULL,             -- ตำแหน่งที่ขอฝึกงาน
-  `submittedDate` DATETIME NOT NULL,        -- วันที่ยื่นคำร้อง
-  `status` VARCHAR(100) NOT NULL DEFAULT 'รออาจารย์ที่ปรึกษาอนุมัติ', -- สถานะ
-  `details` JSON NULL,                      -- เก็บข้อมูลเสริม (เช่น companyAddress, contactPerson)
-  `admin_comment` TEXT NULL,                -- ความเห็นแอดมิน
-  `advisor_comment` TEXT NULL,              -- ความเห็นอาจารย์ที่ปรึกษา
-  `company_comment` TEXT NULL,              -- ความเห็นจากบริษัท
-  `dispatchLetter` JSON NULL,               -- ข้อมูลหนังสือส่งตัว
-  `createdAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE `daily_checkins` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `studentId` varchar(50) NOT NULL COMMENT 'รหัสนักศึกษา',
+  `studentName` varchar(255) DEFAULT NULL,
+  `date` date NOT NULL,
+  `status` enum('present','late','absent') DEFAULT 'present',
+  `note` text DEFAULT NULL,
+  `createdAt` datetime DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_student_date` (`studentId`,`date`),
+  KEY `idx_daily_checkins_studentId` (`studentId`),
+  KEY `idx_daily_checkins_date` (`date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 3. ตาราง daily_checkins (เก็บข้อมูลการเช็คชื่อรายวัน)
-CREATE TABLE IF NOT EXISTS `daily_checkins` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `studentId` VARCHAR(50) NOT NULL,         -- รหัสนักศึกษา
-  `studentName` VARCHAR(255) NULL,          -- ชื่อนักศึกษา
-  `date` DATE NOT NULL,                     -- วันที่ลงเวลา
-  `status` VARCHAR(50) NOT NULL DEFAULT 'present', -- สถานะการเช็คชื่อ
-  `note` TEXT NULL,                         -- หมายเหตุ
-  `createdAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY `unique_student_date` (`studentId`, `date`) -- ป้องกันการเช็คชื่อซ้ำในวันเดียวกัน
+CREATE TABLE `evaluations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `requestId` int(11) NOT NULL,
+  `studentId` varchar(50) NOT NULL,
+  `evaluatorName` varchar(255) DEFAULT NULL,
+  `evaluatorPosition` varchar(255) DEFAULT NULL,
+  `evaluatorDepartment` varchar(255) DEFAULT NULL,
+  `q1` int(11) DEFAULT NULL,
+  `q2` int(11) DEFAULT NULL,
+  `q3` int(11) DEFAULT NULL,
+  `q4` int(11) DEFAULT NULL,
+  `q5` int(11) DEFAULT NULL,
+  `q6` int(11) DEFAULT NULL,
+  `q7` int(11) DEFAULT NULL,
+  `q8` int(11) DEFAULT NULL,
+  `q9` int(11) DEFAULT NULL,
+  `q10` int(11) DEFAULT NULL,
+  `q11` int(11) DEFAULT NULL,
+  `q12` int(11) DEFAULT NULL,
+  `q13` int(11) DEFAULT NULL,
+  `q14` int(11) DEFAULT NULL,
+  `q15` int(11) DEFAULT NULL,
+  `q16` int(11) DEFAULT NULL,
+  `q17` int(11) DEFAULT NULL,
+  `q18` int(11) DEFAULT NULL,
+  `q19` int(11) DEFAULT NULL,
+  `q20` int(11) DEFAULT NULL,
+  `strengths` text DEFAULT NULL,
+  `improvements` text DEFAULT NULL,
+  `hireFuture` varchar(50) DEFAULT NULL,
+  `overallScore` varchar(50) DEFAULT NULL,
+  `projectUsage` varchar(100) DEFAULT NULL,
+  `otherComments` text DEFAULT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `requestId` (`requestId`),
+  CONSTRAINT `evaluations_ibfk_1` FOREIGN KEY (`requestId`) REFERENCES `requests` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 4. ตาราง payment_proofs (เก็บข้อมูลหลักฐานการชำระเงิน)
-CREATE TABLE IF NOT EXISTS `payment_proofs` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY,
-  `studentId` VARCHAR(50) NOT NULL,         -- รหัสนักศึกษา
-  `studentName` VARCHAR(255) NULL,          -- ชื่อนักศึกษา
-  `date` DATE NULL,                         -- วันที่บนสลิป/ทำรายการ
-  `department` VARCHAR(255) NULL,           -- สาขาวิชา
-  `slipDataUrl` LONGTEXT NULL,              -- URL หรือ Base64 รูปภาพสลิป (ใช้ LONGTEXT เผื่อเป็น Base64 ยาวๆ)
-  `slipFileName` VARCHAR(255) NULL,         -- ชื่อไฟล์สลิป
-  `status` VARCHAR(50) NOT NULL DEFAULT 'pending', -- สถานะการอนุมัติ (pending, approved, rejected)
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE `payment_proofs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `studentId` varchar(50) NOT NULL,
+  `studentName` varchar(255) DEFAULT NULL,
+  `date` varchar(50) DEFAULT NULL COMMENT 'วันที่ชำระ (th-TH format)',
+  `status` enum('pending','approved','rejected') DEFAULT 'pending',
+  `department` varchar(200) DEFAULT NULL,
+  `slipDataUrl` longtext DEFAULT NULL COMMENT 'base64 รูปสลิป',
+  `slipFileName` varchar(255) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_payment_proofs_studentId` (`studentId`),
+  KEY `idx_payment_proofs_status` (`status`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `requests` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `studentId` varchar(50) NOT NULL COMMENT 'รหัสนักศึกษา (อ้างอิงจาก users.studentId)',
+  `studentName` varchar(255) DEFAULT NULL,
+  `department` varchar(200) DEFAULT NULL,
+  `company` varchar(255) DEFAULT NULL COMMENT 'ชื่อบริษัท',
+  `position` varchar(200) DEFAULT NULL,
+  `submittedDate` datetime DEFAULT NULL,
+  `status` varchar(100) DEFAULT 'รออาจารย์ที่ปรึกษาอนุมัติ' COMMENT 'สถานะภาษาไทย',
+  `details` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'ข้อมูลรายละเอียดทั้งหมด' CHECK (json_valid(`details`)),
+  `admin_comment` text DEFAULT NULL,
+  `advisor_comment` text DEFAULT NULL,
+  `dispatchLetter` longtext DEFAULT NULL COMMENT 'JSON: {fileName, mimeType, dataUrl} หนังสือส่งตัว',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `supervisionAppointment` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`supervisionAppointment`)),
+  PRIMARY KEY (`id`),
+  KEY `idx_requests_studentId` (`studentId`),
+  KEY `idx_requests_status` (`status`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `users` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `username` varchar(255) NOT NULL COMMENT 'ใช้เป็น email ด้วย',
+  `password` varchar(255) NOT NULL,
+  `name` varchar(255) NOT NULL COMMENT 'ชื่อ-นามสกุล',
+  `role` enum('student','company','advisor','admin') NOT NULL,
+  `studentId` varchar(50) DEFAULT NULL COMMENT 'รหัสนักศึกษา',
+  `department` varchar(200) DEFAULT NULL COMMENT 'สาขาวิชา',
+  `address` text DEFAULT NULL,
+  `phone` varchar(20) DEFAULT NULL,
+  `contactPerson` varchar(200) DEFAULT NULL COMMENT 'ผู้ติดต่อ (สำหรับบริษัท)',
+  `avatar` text DEFAULT NULL COMMENT 'base64 avatar หรือ URL',
+  `is_active` tinyint(1) DEFAULT 1,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `username` (`username`),
+  KEY `idx_users_role` (`role`),
+  KEY `idx_users_studentId` (`studentId`)
+) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

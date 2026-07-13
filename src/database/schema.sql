@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS daily_checkins (
   date DATE NOT NULL,
   status ENUM('present', 'late', 'absent') DEFAULT 'present',
   note TEXT DEFAULT NULL,
+  work_experience TEXT DEFAULT NULL,
   createdAt DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY unique_student_date (studentId, date)
 ) ENGINE=InnoDB;

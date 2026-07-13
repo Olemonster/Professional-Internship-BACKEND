@@ -60,6 +60,8 @@ const parseRequestRow = (row) => {
   const parsed = { ...row, id: String(row.id) };
   if (typeof parsed.details === 'string') { try { parsed.details = JSON.parse(parsed.details); } catch (_) {} }
   if (typeof parsed.dispatchLetter === 'string') { try { parsed.dispatchLetter = JSON.parse(parsed.dispatchLetter); } catch (_) {} }
+  if (typeof parsed.supervisionAppointment === 'string') { try { parsed.supervisionAppointment = JSON.parse(parsed.supervisionAppointment); } catch (_) {} }
+  if (typeof parsed.supervisionReport === 'string') { try { parsed.supervisionReport = JSON.parse(parsed.supervisionReport); } catch (_) {} }
   return parsed;
 };
 
@@ -402,19 +404,27 @@ app.delete('/api/users/:id', authenticate, authorize('admin'), async (req, res) 
 app.get('/api/requests', authenticate, async (req, res) => {
   try {
     const { studentId, status, department, search } = req.query;
-    let sql = 'SELECT * FROM requests WHERE 1=1';
+    let sql = `
+      SELECT r.*, 
+             IF(e.id IS NOT NULL, true, false) AS hasCompanyEval,
+             IF(ae.id IS NOT NULL, true, false) AS hasAdvisorEval
+      FROM requests r
+      LEFT JOIN evaluations e ON r.id = e.requestId
+      LEFT JOIN advisor_evaluations ae ON r.id = ae.requestId
+      WHERE 1=1
+    `;
     const params = [];
 
-    if (studentId) { sql += ' AND studentId = ?'; params.push(studentId); }
-    if (status && status !== 'all') { sql += ' AND status = ?'; params.push(status); }
-    if (department && department !== 'all') { sql += ' AND department = ?'; params.push(department); }
+    if (studentId) { sql += ' AND r.studentId = ?'; params.push(studentId); }
+    if (status && status !== 'all') { sql += ' AND r.status = ?'; params.push(status); }
+    if (department && department !== 'all') { sql += ' AND r.department = ?'; params.push(department); }
     if (search) {
-      sql += ' AND (studentName LIKE ? OR studentId LIKE ? OR company LIKE ?)';
+      sql += ' AND (r.studentName LIKE ? OR r.studentId LIKE ? OR r.company LIKE ?)';
       const s = `%${search}%`;
       params.push(s, s, s);
     }
 
-    sql += ' ORDER BY submittedDate DESC';
+    sql += ' ORDER BY r.submittedDate DESC';
     const [rows] = await pool.query(sql, params);
     const data = rows.map(parseRequestRow);
     res.json({ success: true, data });
@@ -515,6 +525,21 @@ app.patch('/api/requests/:id/status', authenticate, async (req, res) => {
   }
 });
 
+// PATCH /api/requests/:id/appointment
+app.patch('/api/requests/:id/appointment', authenticate, async (req, res) => {
+  try {
+    const { date, mode, note } = req.body;
+    const appointmentData = { date, mode, note, updatedAt: new Date().toISOString() };
+    await pool.query(
+      'UPDATE requests SET supervisionAppointment = ? WHERE id = ?',
+      [JSON.stringify(appointmentData), req.params.id]
+    );
+    res.json({ success: true, message: 'อัปเดตวันนัดนิเทศสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // DELETE /api/requests/:id
 app.delete('/api/requests/:id', authenticate, async (req, res) => {
   try {
@@ -572,18 +597,24 @@ app.get('/api/checkins/:id', authenticate, async (req, res) => {
 // POST /api/checkins
 app.post('/api/checkins', authenticate, async (req, res) => {
   try {
-    const { studentId, studentName, date, status, note } = req.body;
+    const { studentId, studentName, date, status, note, workExperience } = req.body;
+    
+    // Check if already checked in today
+    const [existing] = await pool.query('SELECT id FROM daily_checkins WHERE studentId = ? AND date = ?', [studentId, date]);
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: 'คุณเช็คชื่อของวันนี้ไปแล้ว (จะรีเซ็ตในวันถัดไปหลัง 07:00 น.)' });
+    }
+
     await pool.query(
-      `INSERT INTO daily_checkins (studentId, studentName, date, status, note)
-       VALUES (?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE status = VALUES(status), note = VALUES(note), studentName = VALUES(studentName)`,
-      [studentId, studentName || null, date, status || 'present', note || null]
+      `INSERT INTO daily_checkins (studentId, studentName, date, status, note, work_experience)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [studentId, studentName || null, date, status || 'present', note || null, workExperience || null]
     );
     const [rows] = await pool.query('SELECT * FROM daily_checkins WHERE studentId = ? AND date = ?', [studentId, date]);
     res.status(201).json({ success: true, message: 'บันทึกการเช็คชื่อเรียบร้อยแล้ว', data: rows[0] || null });
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ success: false, message: 'คุณเช็คชื่อวันที่นี้แล้ว' });
+      return res.status(409).json({ success: false, message: 'คุณเช็คชื่อของวันนี้ไปแล้ว (จะรีเซ็ตในวันถัดไปหลัง 07:00 น.)' });
     }
     res.status(500).json({ success: false, message: error.message });
   }
@@ -669,6 +700,319 @@ app.patch('/api/payments/:id/reject', authenticate, async (req, res) => {
     const [updated] = await pool.query('SELECT * FROM payment_proofs WHERE id = ?', [req.params.id]);
     if (!updated[0]) return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลการชำระเงิน' });
     res.json({ success: true, message: 'ปฏิเสธการชำระเงินเรียบร้อย', data: updated[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// =============================================
+// EVALUATIONS Routes
+// =============================================
+
+// GET /api/public/evaluate/request/:id (Check if request exists and get info for form)
+app.get('/api/public/evaluate/request/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+    
+    // ตรวจสอบว่าเคยประเมินหรือยัง
+    const [evalRows] = await pool.query('SELECT id FROM evaluations WHERE requestId = ?', [req.params.id]);
+    if (evalRows.length > 0) {
+      return res.json({ success: true, evaluated: true, message: 'นักศึกษาคนนี้ได้รับการประเมินแล้ว' });
+    }
+    res.json({ success: true, evaluated: false, data: parseRequestRow(rows[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/public/evaluate/:requestId
+app.post('/api/public/evaluate/:requestId', async (req, res) => {
+  try {
+    const reqId = req.params.requestId;
+    const {
+      studentId, evaluatorName, evaluatorPosition, evaluatorDepartment,
+      q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15, q16, q17, q18, q19, q20,
+      strengths, improvements, hireFuture, overallScore, projectUsage, otherComments, signature
+    } = req.body;
+    
+    await pool.query(
+      `INSERT INTO evaluations (
+        requestId, studentId, evaluatorName, evaluatorPosition, evaluatorDepartment,
+        q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15, q16, q17, q18, q19, q20,
+        strengths, improvements, hireFuture, overallScore, projectUsage, otherComments, signature
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        reqId, studentId, evaluatorName, evaluatorPosition, evaluatorDepartment,
+        q1, q2, q3, q4, q5, q6, q7, q8, q9, q10, q11, q12, q13, q14, q15, q16, q17, q18, q19, q20,
+        strengths, improvements, hireFuture, overallScore, projectUsage, otherComments, signature || null
+      ]
+    );
+
+    // Update the request status
+    await pool.query('UPDATE requests SET status = ? WHERE id = ?', ['ประเมินเสร็จแล้ว', reqId]);
+
+    res.status(201).json({ success: true, message: 'บันทึกผลการประเมินสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/evaluations/request/:requestId (auth needed - for admin/advisor)
+app.get('/api/evaluations/request/:requestId', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM evaluations WHERE requestId = ?', [req.params.requestId]);
+    if (!rows[0]) return res.json({ success: true, data: null });
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/evaluations/analytics (auth admin needed)
+app.get('/api/evaluations/analytics', authenticate, async (req, res) => {
+  try {
+    // Check if admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
+    const [rows] = await pool.query(`
+      SELECT 
+        r.department, 
+        r.company,
+        e.q1, e.q2, e.q3, e.q4, e.q5, e.q6, e.q7, e.q8, e.q9, e.q10,
+        e.q11, e.q12, e.q13, e.q14, e.q15, e.q16, e.q17, e.q18, e.q19, e.q20,
+        e.hireFuture
+      FROM evaluations e
+      JOIN requests r ON e.requestId = r.id
+      WHERE r.status IN ('ประเมินเสร็จแล้ว', 'ฝึกงานเสร็จแล้ว')
+    `);
+
+    // Aggregate Data
+    const deptStats = {};
+    const companyStats = {};
+    let totalEvals = 0;
+
+    rows.forEach(row => {
+      totalEvals++;
+      // Department Stats
+      if (!deptStats[row.department]) {
+        deptStats[row.department] = {
+          count: 0,
+          cat1: { sum: 0, count: 0 }, // ผลสำเร็จของงาน (1-2)
+          cat2: { sum: 0, count: 0 }, // ความรู้ความสามารถ (3-14)
+          cat3: { sum: 0, count: 0 }  // ลักษณะส่วนบุคคล (15-20)
+        };
+      }
+      deptStats[row.department].count++;
+      
+      const sumAvg = (start, end, targetObj) => {
+        for(let i=start; i<=end; i++) {
+          const val = row[`q${i}`];
+          if (val && !isNaN(val)) {
+            targetObj.sum += parseInt(val);
+            targetObj.count++;
+          }
+        }
+      };
+
+      sumAvg(1, 2, deptStats[row.department].cat1);
+      sumAvg(3, 14, deptStats[row.department].cat2);
+      sumAvg(15, 20, deptStats[row.department].cat3);
+
+      // Company Stats
+      if (row.company) {
+        if (!companyStats[row.company]) {
+          companyStats[row.company] = { total: 0, hire: 0, maybe: 0, no: 0 };
+        }
+        companyStats[row.company].total++;
+        if (row.hireFuture === 'รับ') companyStats[row.company].hire++;
+        else if (row.hireFuture === 'ไม่แน่ใจ') companyStats[row.company].maybe++;
+        else if (row.hireFuture === 'ไม่รับ') companyStats[row.company].no++;
+      }
+    });
+
+    // Format output
+    const formattedDeptStats = Object.keys(deptStats).map(dept => {
+      const d = deptStats[dept];
+      return {
+        department: dept,
+        count: d.count,
+        avgCat1: d.cat1.count > 0 ? (d.cat1.sum / d.cat1.count).toFixed(2) : 0,
+        avgCat2: d.cat2.count > 0 ? (d.cat2.sum / d.cat2.count).toFixed(2) : 0,
+        avgCat3: d.cat3.count > 0 ? (d.cat3.sum / d.cat3.count).toFixed(2) : 0,
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      data: {
+        totalEvals,
+        departments: formattedDeptStats,
+        companies: companyStats
+      } 
+    });
+
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// =============================================
+// ADVISOR EVALUATIONS Routes
+// =============================================
+
+// GET /api/advisor-evaluations/request/:requestId
+app.get('/api/advisor-evaluations/request/:requestId', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM advisor_evaluations WHERE requestId = ?', [req.params.requestId]);
+    if (!rows[0]) return res.json({ success: true, data: null });
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/advisor-evaluations/request/:requestId
+app.post('/api/advisor-evaluations/request/:requestId', authenticate, async (req, res) => {
+  try {
+    const reqId = req.params.requestId;
+    const {
+      advisorName,
+      c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, companyComments,
+      s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, studentComments
+    } = req.body;
+    
+    // Check if exists
+    const [existing] = await pool.query('SELECT id FROM advisor_evaluations WHERE requestId = ?', [reqId]);
+    if (existing.length > 0) {
+      await pool.query(
+        `UPDATE advisor_evaluations SET 
+          advisorName=?, c1=?, c2=?, c3=?, c4=?, c5=?, c6=?, c7=?, c8=?, c9=?, c10=?, c11=?, c12=?, c13=?, c14=?, c15=?, c16=?, c17=?, companyComments=?,
+          s1=?, s2=?, s3=?, s4=?, s5=?, s6=?, s7=?, s8=?, s9=?, s10=?, s11=?, s12=?, s13=?, s14=?, s15=?, s16=?, s17=?, s18=?, s19=?, s20=?, studentComments=?
+        WHERE requestId=?`,
+        [
+          advisorName, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, companyComments,
+          s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, studentComments, reqId
+        ]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO advisor_evaluations (
+          requestId, advisorName,
+          c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, companyComments,
+          s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, studentComments
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          reqId, advisorName,
+          c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, c16, c17, companyComments,
+          s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15, s16, s17, s18, s19, s20, studentComments
+        ]
+      );
+    }
+
+    // Also update supervisionReport json in requests table so list query doesn't break
+    await pool.query(
+      `UPDATE requests SET supervisionReport = ? WHERE id = ?`,
+      [JSON.stringify({ result: 'ผ่าน', note: 'ประเมินแบบฟอร์มละเอียดแล้ว' }), reqId]
+    );
+
+    res.status(201).json({ success: true, message: 'บันทึกผลการนิเทศสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =============================================
+// ANNOUNCEMENTS Routes
+// =============================================
+
+// GET /api/public/announcements (no auth — for HomePage)
+app.get('/api/public/announcements', async (req, res) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM announcements WHERE is_active = 1 ORDER BY is_pinned DESC, created_at DESC LIMIT 20'
+    );
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/public/announcements/:id (no auth — single announcement detail)
+app.get('/api/public/announcements/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM announcements WHERE id = ? AND is_active = 1', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบข่าว' });
+    res.json({ success: true, data: rows[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/announcements (admin — all announcements)
+app.get('/api/announcements', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM announcements ORDER BY is_pinned DESC, created_at DESC');
+    res.json({ success: true, data: rows });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/announcements (admin — create)
+app.post('/api/announcements', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { title, content, category, coverImage, is_pinned } = req.body;
+    if (!title || !content) {
+      return res.status(400).json({ success: false, message: 'กรุณาระบุหัวข้อและเนื้อหา' });
+    }
+    const author = req.user?.name || req.user?.username || 'Admin';
+    const [result] = await pool.query(
+      'INSERT INTO announcements (title, content, category, coverImage, is_pinned, author) VALUES (?, ?, ?, ?, ?, ?)',
+      [title, content, category || 'ทั่วไป', coverImage || null, is_pinned ? 1 : 0, author]
+    );
+    const [created] = await pool.query('SELECT * FROM announcements WHERE id = ?', [result.insertId]);
+    res.status(201).json({ success: true, message: 'สร้างข่าวประชาสัมพันธ์สำเร็จ', data: created[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PUT /api/announcements/:id (admin — update)
+app.put('/api/announcements/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { title, content, category, coverImage, is_pinned } = req.body;
+    await pool.query(
+      'UPDATE announcements SET title = ?, content = ?, category = ?, coverImage = ?, is_pinned = ? WHERE id = ?',
+      [title, content, category || 'ทั่วไป', coverImage || null, is_pinned ? 1 : 0, req.params.id]
+    );
+    const [updated] = await pool.query('SELECT * FROM announcements WHERE id = ?', [req.params.id]);
+    if (!updated[0]) return res.status(404).json({ success: false, message: 'ไม่พบข่าว' });
+    res.json({ success: true, message: 'อัปเดตข่าวสำเร็จ', data: updated[0] });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/announcements/:id (admin — delete)
+app.delete('/api/announcements/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const [result] = await pool.query('DELETE FROM announcements WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'ไม่พบข่าว' });
+    res.json({ success: true, message: 'ลบข่าวสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PATCH /api/announcements/:id/toggle (admin — toggle active)
+app.patch('/api/announcements/:id/toggle', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT is_active FROM announcements WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบข่าว' });
+    const newStatus = rows[0].is_active ? 0 : 1;
+    await pool.query('UPDATE announcements SET is_active = ? WHERE id = ?', [newStatus, req.params.id]);
+    res.json({ success: true, message: newStatus ? 'เปิดแสดงข่าวแล้ว' : 'ซ่อนข่าวแล้ว', is_active: newStatus });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
