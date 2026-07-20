@@ -544,6 +544,57 @@ app.patch('/api/requests/:id/status', authenticate, async (req, res) => {
   }
 });
 
+// PUT /api/requests/:id (Update existing request and reset status if rejected)
+app.put('/api/requests/:id', authenticate, async (req, res) => {
+  try {
+    const { studentName, department, company, position, details } = req.body;
+    
+    // Get existing request to check previous status
+    const [existing] = await pool.query('SELECT status FROM requests WHERE id = ? AND studentId = ?', [req.params.id, req.user.username || req.user.student_code || req.body.studentId]);
+    if (!existing[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง หรือคุณไม่มีสิทธิ์แก้ไขคำร้องนี้' });
+    
+    let newStatus = existing[0].status;
+    let clearAdminComment = false;
+    let clearAdvisorComment = false;
+
+    // Reset status based on who rejected it
+    if (newStatus === 'ไม่อนุมัติ (Admin)' || newStatus === 'ปฏิเสธ') {
+      newStatus = 'รอผู้ดูแลระบบตรวจสอบ';
+      clearAdminComment = true;
+    } else if (newStatus === 'ไม่อนุมัติ (อาจารย์)') {
+      newStatus = 'รออาจารย์ที่ปรึกษาอนุมัติ';
+      clearAdvisorComment = true;
+    }
+
+    const updates = [
+      'studentName = ?', 'department = ?', 'company = ?', 'position = ?', 'details = ?', 'status = ?'
+    ];
+    const params = [
+      studentName || null, department || null, company || null, position || null, 
+      details ? JSON.stringify(details) : null, newStatus
+    ];
+
+    if (clearAdminComment) {
+      updates.push('admin_comment = NULL');
+    }
+    if (clearAdvisorComment) {
+      updates.push('advisor_comment = NULL');
+    }
+
+    params.push(req.params.id);
+
+    await pool.query(
+      `UPDATE requests SET ${updates.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'อัปเดตคำร้องสำเร็จ', data: parseRequestRow(updated[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // PATCH /api/requests/:id/appointment
 app.patch('/api/requests/:id/appointment', authenticate, async (req, res) => {
   try {
