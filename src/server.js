@@ -550,8 +550,13 @@ app.put('/api/requests/:id', authenticate, async (req, res) => {
     const { studentName, department, company, position, details } = req.body;
     
     // Get existing request to check previous status
-    const [existing] = await pool.query('SELECT status FROM requests WHERE id = ? AND studentId = ?', [req.params.id, req.user.username || req.user.student_code || req.body.studentId]);
-    if (!existing[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง หรือคุณไม่มีสิทธิ์แก้ไขคำร้องนี้' });
+    const [existing] = await pool.query('SELECT status, studentId FROM requests WHERE id = ?', [req.params.id]);
+    if (!existing[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+    
+    // Check permission: either admin, or the student who owns the request
+    if (req.user.role !== 'admin' && existing[0].studentId !== req.body.studentId && existing[0].studentId !== req.user.username) {
+       return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขคำร้องนี้' });
+    }
     
     let newStatus = existing[0].status;
     let clearAdminComment = false;
