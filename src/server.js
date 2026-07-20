@@ -23,7 +23,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // =============================================
 // Database Connection Pool
 // =============================================
-const pool = mysql.createPool({
+const dbConfig = {
   host: process.env.DB_HOST,
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER,
@@ -33,11 +33,30 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  maxAllowedPacket: 50 * 1024 * 1024,
-});
+};
 
-// พยายามเพิ่ม max_allowed_packet อัตโนมัติเผื่อ Database บน Railway ตั้งค่าไว้ต่ำเกินไป (ถ้ามีสิทธิ์ SUPER)
-pool.query('SET GLOBAL max_allowed_packet = 67108864').catch(e => console.log('Notice: Could not set max_allowed_packet (might not have SUPER privilege):', e.message));
+let pool;
+
+async function initDB() {
+  try {
+    // 1. Create a temporary connection to set global max_allowed_packet
+    const tempConn = await mysql.createConnection({
+      host: dbConfig.host,
+      port: dbConfig.port,
+      user: dbConfig.user,
+      password: dbConfig.password,
+    });
+    await tempConn.query('SET GLOBAL max_allowed_packet = 67108864').catch(e => console.log('Notice: Could not set max_allowed_packet:', e.message));
+    await tempConn.end();
+  } catch (err) {
+    console.log('Notice: Failed to connect to DB during init:', err.message);
+  }
+
+  // 2. Create the actual pool which will now use the updated global max_allowed_packet
+  pool = mysql.createPool(dbConfig);
+}
+
+initDB();
 
 // =============================================
 // Auth Middleware
