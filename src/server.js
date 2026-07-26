@@ -8,6 +8,7 @@ const cors = require('cors');
 const mysql = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const cron = require('node-cron');
 require('dotenv').config();
 
 const app = express();
@@ -422,6 +423,19 @@ app.delete('/api/users/:id', authenticate, authorize('admin'), async (req, res) 
 // GET /api/requests
 app.get('/api/requests', authenticate, async (req, res) => {
   try {
+    // Auto-finish requests where company evaluation was completed > 3 days ago
+    try {
+      await pool.query(`
+        UPDATE requests r
+        JOIN evaluations e ON r.id = e.requestId
+        SET r.status = 'ฝึกงานเสร็จแล้ว'
+        WHERE r.status = 'ประเมินเสร็จแล้ว'
+          AND e.createdAt <= NOW() - INTERVAL 3 DAY
+      `);
+    } catch (autoErr) {
+      console.error('Auto-finish query error:', autoErr);
+    }
+
     const { studentId, status, department, search } = req.query;
     let sql = `
       SELECT r.*, 
@@ -471,7 +485,7 @@ app.get('/api/public/requests/:id', async (req, res) => {
 app.patch('/api/public/requests/:id/status', async (req, res) => {
   try {
     const { status, company_comment } = req.body;
-    const allowed = ['อนุมัติแล้ว', 'ปฏิเสธ'];
+    const allowed = ['อนุมัติแล้ว', 'รออาจารย์อนุมัติเริ่มฝึกงาน', 'ปฏิเสธ'];
     if (!allowed.includes(status)) {
       return res.status(400).json({ success: false, message: 'สถานะไม่ถูกต้อง' });
     }
@@ -1103,6 +1117,46 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err.message);
   res.status(err.statusCode || 500).json({ success: false, message: err.message || 'เกิดข้อผิดพลาดภายในเซิร์ฟเวอร์' });
+});
+
+// =============================================
+// CRON JOBS
+// =============================================
+// รันทุกเที่ยงคืน (0 0 * * *) เพื่อเช็ควันที่เริ่มฝึกงานและอนุมัติอัตโนมัติ
+cron.schedule('0 0 * * *', async () => {
+  console.log('[Cron] Running daily check for internship start dates...');
+  try {
+    const [requests] = await pool.query("SELECT id, details FROM requests WHERE status = 'รออาจารย์อนุมัติเริ่มฝึกงาน'");
+    let updatedCount = 0;
+    
+    for (const req of requests) {
+      if (req.details) {
+        let detailsObj = req.details;
+        if (typeof req.details === 'string') {
+          try { detailsObj = JSON.parse(req.details); } catch(e) {}
+        }
+        
+        if (detailsObj.startDate) {
+          const startDate = new Date(detailsObj.startDate);
+          const today = new Date();
+          
+          // Reset time for comparison
+          startDate.setHours(0, 0, 0, 0);
+          today.setHours(0, 0, 0, 0);
+          
+          if (today >= startDate) {
+            await pool.query("UPDATE requests SET status = 'ออกฝึกงาน' WHERE id = ?", [req.id]);
+            updatedCount++;
+          }
+        }
+      }
+    }
+    if (updatedCount > 0) {
+      console.log(`[Cron] Auto-approved ${updatedCount} requests to 'ออกฝึกงาน'.`);
+    }
+  } catch (error) {
+    console.error('[Cron Error]', error);
+  }
 });
 
 // =============================================
