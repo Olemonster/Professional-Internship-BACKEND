@@ -55,6 +55,12 @@ async function initDB() {
 
   // 2. Create the actual pool which will now use the updated global max_allowed_packet
   pool = mysql.createPool(dbConfig);
+
+  try {
+    const conn = await pool.getConnection();
+    await conn.query("ALTER TABLE users ADD COLUMN email VARCHAR(255) DEFAULT NULL").catch(() => {});
+    conn.release();
+  } catch (e) {}
 }
 
 initDB();
@@ -100,7 +106,7 @@ const toFrontendUser = (row) => {
   return {
     id: String(row.id),
     username: row.username,
-    email: row.username,
+    email: row.email || row.username,
     name: row.name,
     full_name: row.name,
     role: row.role,
@@ -182,7 +188,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ success: false, message: 'กรุณากรอก username และ password' });
     }
 
-    const [rows] = await pool.query('SELECT * FROM users WHERE username = ?', [email]);
+    const [rows] = await pool.query('SELECT * FROM users WHERE username = ? OR email = ?', [email, email]);
     const user = rows[0];
     if (!user) {
       return res.status(401).json({ success: false, message: 'ไม่พบผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง' });
@@ -227,20 +233,14 @@ app.get('/api/public/companies', async (req, res) => {
   try {
     const map = new Map();
 
-    const [companyRows] = await pool.query("SELECT * FROM users WHERE role = 'company'");
-    companyRows.forEach((company) => {
-      addCompanyEntry(map, {
-        name: company.name || company.username,
-        businessType: company.businessType || 'ไม่ระบุประเภทธุรกิจ',
-        address: company.address || '',
-        contactPerson: company.contactPerson || '',
-        phone: company.phone || '',
-        source: 'จากบัญชีบริษัท',
-        imageUrl: company.logo || company.imageUrl || null,
-      });
-    });
+    // Only fetch requests from senior students who have completed their internship
+    // Valid completed statuses: 'ฝึกงานเสร็จแล้ว', 'ประเมินเสร็จแล้ว', 'ผ่านการฝึกงาน', 'ออกฝึกงาน', 'อนุมัติแล้ว'
+    const [requestRows] = await pool.query(`
+      SELECT * FROM requests 
+      WHERE status IN ('ฝึกงานเสร็จแล้ว', 'ประเมินเสร็จแล้ว', 'ผ่านการฝึกงาน', 'ออกฝึกงาน', 'อนุมัติแล้ว')
+      ORDER BY updated_at DESC
+    `);
 
-    const [requestRows] = await pool.query('SELECT * FROM requests');
     requestRows.forEach((request) => {
       const rawDetails =
         typeof request.details === 'string'
@@ -252,21 +252,23 @@ app.get('/api/public/companies', async (req, res) => {
               }
             })()
           : request.details || {};
+
       const companyName =
         request.companyName || request.company || rawDetails.companyName || rawDetails.company || '';
       if (!companyName) return;
+
       addCompanyEntry(map, {
         name: companyName,
-        businessType: request.position ? `ตำแหน่งยอดฮิต: ${request.position}` : 'ไม่ระบุประเภทธุรกิจ',
+        businessType: request.position ? `ตำแหน่งงาน: ${request.position}` : 'ไม่ระบุประเภทธุรกิจ',
         address: rawDetails.companyAddress || request.address || '',
-        contactPerson: rawDetails.contactPerson || '',
-        phone: rawDetails.phone || '',
-        source: 'จากคำร้องรุ่นพี่',
+        contactPerson: rawDetails.contactPerson || rawDetails.supervisor || '',
+        phone: rawDetails.phone || rawDetails.supervisorPhone || '',
+        source: 'จากรุ่นพี่ที่ฝึกงานเสร็จแล้ว',
         imageUrl: rawDetails.imageUrl || null,
       });
     });
 
-    const data = Array.from(map.values()).slice(0, 24);
+    const data = Array.from(map.values()).slice(0, 30);
     res.json({ success: true, data });
   } catch (error) {
     console.error('Public companies error:', error);
@@ -377,7 +379,7 @@ app.post('/api/users/import', authenticate, authorize('admin'), async (req, res)
 // PUT /api/users/:id — อัปเดตผู้ใช้ (ทุก role อัปเดตตัวเองได้)
 app.put('/api/users/:id', authenticate, async (req, res) => {
   try {
-    const allowed = ['username', 'name', 'role', 'studentId', 'department', 'address', 'phone', 'contactPerson', 'avatar', 'is_active'];
+    const allowed = ['username', 'email', 'name', 'role', 'studentId', 'department', 'address', 'phone', 'contactPerson', 'avatar', 'is_active'];
     const updates = [];
     const params = [];
 
@@ -425,6 +427,7 @@ app.get('/api/requests', authenticate, async (req, res) => {
   try {
     // Auto-finish requests where company evaluation was completed > 3 days ago
     try {
+      // 1. Auto-finish requests where company evaluation was completed > 3 days ago
       await pool.query(`
         UPDATE requests r
         JOIN evaluations e ON r.id = e.requestId
@@ -432,8 +435,15 @@ app.get('/api/requests', authenticate, async (req, res) => {
         WHERE r.status = 'ประเมินเสร็จแล้ว'
           AND e.createdAt <= NOW() - INTERVAL 3 DAY
       `);
+      // 2. Auto-start requests waiting for advisor approval > 3 days ago
+      await pool.query(`
+        UPDATE requests
+        SET status = 'ออกฝึกงาน'
+        WHERE status IN ('อนุมัติแล้ว', 'รออาจารย์อนุมัติเริ่มฝึกงาน')
+          AND submittedDate <= NOW() - INTERVAL 3 DAY
+      `);
     } catch (autoErr) {
-      console.error('Auto-finish query error:', autoErr);
+      console.error('Auto-update query error:', autoErr);
     }
 
     const { studentId, status, department, search } = req.query;
@@ -715,6 +725,26 @@ app.delete('/api/checkins/:id', authenticate, async (req, res) => {
     const [result] = await pool.query('DELETE FROM daily_checkins WHERE id = ?', [req.params.id]);
     if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลเช็คชื่อ' });
     res.json({ success: true, message: 'ลบเช็คชื่อสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/checkins/student/:studentId
+app.delete('/api/checkins/student/:studentId', authenticate, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM daily_checkins WHERE studentId = ?', [req.params.studentId]);
+    res.json({ success: true, message: 'ลบรายงานประจำวันสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/payment-proofs/student/:studentId
+app.delete('/api/payment-proofs/student/:studentId', authenticate, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM payment_proofs WHERE studentId = ?', [req.params.studentId]);
+    res.json({ success: true, message: 'ลบหลักฐานชำระเงินสำเร็จ' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -1104,6 +1134,57 @@ app.patch('/api/announcements/:id/toggle', authenticate, authorize('admin'), asy
     res.json({ success: true, message: newStatus ? 'เปิดแสดงข่าวแล้ว' : 'ซ่อนข่าวแล้ว', is_active: newStatus });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =============================================
+// Admin: Selective/Batch Delete Student Data Endpoint
+// =============================================
+app.post('/api/admin/delete-student-data', authenticate, authorize('admin'), async (req, res) => {
+  const {
+    studentIds,
+    deleteRequests = true,
+    deleteCheckins = true,
+    deletePayments = true
+  } = req.body;
+
+  if (!Array.isArray(studentIds) || studentIds.length === 0) {
+    return res.status(400).json({ success: false, message: 'กรุณาระบุรายชื่อนักศึกษาที่ต้องการลบ' });
+  }
+
+  try {
+    for (const sid of studentIds) {
+      const studentIdStr = String(sid);
+
+      // 1. Delete Requests & linked evaluation tables
+      if (deleteRequests) {
+        const [reqRows] = await pool.query(
+          'SELECT id FROM requests WHERE studentId = ?',
+          [studentIdStr]
+        );
+        const reqIds = reqRows.map(r => r.id);
+        if (reqIds.length > 0) {
+          await pool.query('DELETE FROM advisor_evaluations WHERE requestId IN (?)', [reqIds]);
+          await pool.query('DELETE FROM evaluations WHERE requestId IN (?)', [reqIds]);
+          await pool.query('DELETE FROM requests WHERE id IN (?)', [reqIds]);
+        }
+      }
+
+      // 2. Delete Daily Checkins
+      if (deleteCheckins) {
+        await pool.query('DELETE FROM daily_checkins WHERE studentId = ?', [studentIdStr]);
+      }
+
+      // 3. Delete Payment Proofs
+      if (deletePayments) {
+        await pool.query('DELETE FROM payment_proofs WHERE studentId = ?', [studentIdStr]);
+      }
+    }
+
+    return res.json({ success: true, message: 'ลบข้อมูลที่เลือกเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Error deleting student data:', err);
+    return res.status(500).json({ success: false, message: 'เกิดข้อผิดพลาดในการลบข้อมูล: ' + err.message });
   }
 });
 
