@@ -7,7 +7,7 @@
 - ⚙️ RESTful API ครอบคลุมการจัดการผู้ใช้ คำร้อง ขออนุมัติ เช็คชื่อ และการชำระเงิน
 - 🗄️ ใช้ `mysql2/promise` สร้าง connection pool รองรับพร้อมกันหลายคำขอ
 - 🔐 JWT Authentication + Role-based Authorization (student, company, advisor, admin)
-- 🚀 `npm run db:init` สร้างฐานข้อมูล `internship_db` และ seed บัญชีตัวอย่างให้อัตโนมัติ
+- 🚀 `npm run db:init` สร้างฐานข้อมูล `internship_overall` และ seed บัญชีตัวอย่างให้อัตโนมัติ
 - 🌐 Endpoint สุขภาพ `/api/health` ตรวจสอบสถานะการทำงานของเซิร์ฟเวอร์ได้ทันที
 
 ## โครงสร้างโปรเจกต์
@@ -54,7 +54,7 @@ cp .env.example .env
 | `DB_PORT` | 3306 | พอร์ต MySQL |
 | `DB_USER` | root | ชื่อผู้ใช้ฐานข้อมูล |
 | `DB_PASSWORD` | your_password_here | รหัสผ่านฐานข้อมูล |
-| `DB_NAME` | internship_db | ชื่อฐานข้อมูลหลัก |
+| `DB_NAME` | internship_overall | ชื่อฐานข้อมูลหลัก |
 | `JWT_SECRET` | your_jwt_secret_key_here | คีย์สำหรับเซ็น JWT |
 | `JWT_EXPIRES_IN` | 7d | ระยะเวลาหมดอายุของโทเคน |
 
@@ -65,7 +65,7 @@ npm run db:init
 ```
 
 คำสั่งนี้จะ:
-1. สร้างฐานข้อมูล `internship_db`
+1. สร้างฐานข้อมูล `internship_overall`
 2. สร้างตารางทั้งหมดตาม `schema.sql`
 3. เพิ่มบัญชีทดสอบ เช่น `admin / admin123`, `advisor / password`, `student1 / password`, ฯลฯ
 

@@ -18,14 +18,24 @@ async function initDatabase() {
 
     console.log('✅ เชื่อมต่อ MySQL สำเร็จ');
 
-    // อ่านและรัน SQL schema (จะ DROP แล้วสร้างใหม่)
+    const dbName = process.env.DB_NAME || 'internship_overall';
+
+    // 1. อ่านและรัน internship_overall.sql ถ้ามีอยู่
+    const overallSqlPath = path.join(__dirname, '../../internship_overall.sql');
+    if (fs.existsSync(overallSqlPath)) {
+      const overallSql = fs.readFileSync(overallSqlPath, 'utf8');
+      await connection.query(overallSql);
+      console.log('✅ โหลดตารางจาก internship_overall.sql สำเร็จ');
+    }
+
+    // 2. อ่านและรัน SQL schema เพื่อเติมตารางเพิ่มเติมที่ระบบต้องใช้งาน
     const schemaPath = path.join(__dirname, 'schema.sql');
     const sql = fs.readFileSync(schemaPath, 'utf8');
     await connection.query(sql);
-    console.log('✅ สร้างฐานข้อมูลและตารางสำเร็จ');
+    console.log('✅ สร้าง/เสริมตารางฐานข้อมูลสำเร็จ');
 
-    // เพิ่ม Admin เริ่มต้น
-    await connection.query('USE internship_db');
+    // สลับไปยังฐานข้อมูลเป้าหมาย
+    await connection.query(`USE \`${dbName}\``);
     const adminPassword = await bcrypt.hash('admin123', 10);
     await connection.query(
       `INSERT IGNORE INTO users (username, password, name, role)

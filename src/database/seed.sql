@@ -2,7 +2,7 @@
 -- ข้อมูลตัวอย่างสำหรับทดสอบ
 -- =============================================
 
-USE internship_db;
+USE internship_overall;
 
 -- รหัสผ่านทั้งหมดคือ "password123" (bcrypt hash)
 -- $2a$10$XXXXXXXXXXX... จะถูกสร้างจาก seed script

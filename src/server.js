@@ -29,7 +29,7 @@ const dbConfig = {
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD !== undefined ? process.env.DB_PASSWORD : '',
-  database: process.env.DB_NAME || 'internship_db',
+  database: process.env.DB_NAME || 'internship_overall',
   charset: 'utf8mb4',
   waitForConnections: true,
   connectionLimit: 10,
