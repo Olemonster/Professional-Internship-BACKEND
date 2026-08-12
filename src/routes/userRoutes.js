@@ -1,0 +1,242 @@
+const express = require('express');
+const router = express.Router();
+const bcrypt = require('bcryptjs');
+const pool = require('../config/db');
+const { authenticate, authorize } = require('../middlewares/auth');
+const { toFrontendUser, USER_SELECT_SQL } = require('../utils/helpers');
+
+// GET /api/users — ดึงผู้ใช้ทั้งหมด
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const { role, search } = req.query;
+    let sql = `${USER_SELECT_SQL} WHERE 1=1`;
+    const params = [];
+
+    if (role) { sql += ' AND u.role = ?'; params.push(role); }
+    if (search) {
+      sql += ' AND (u.username LIKE ? OR u.email LIKE ? OR p.firstname LIKE ? OR p.lastname LIKE ? OR p.profile_id LIKE ?)';
+      const s = `%${search}%`;
+      params.push(s, s, s, s, s);
+    }
+
+    sql += ' ORDER BY u.createdAt DESC';
+    const [rows] = await pool.query(sql, params);
+    res.json({ success: true, data: rows.map(toFrontendUser) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/users/:id
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const [rows] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ?`, [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
+    res.json({ success: true, data: toFrontendUser(rows[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/users — สร้างผู้ใช้ใหม่ (Admin เท่านั้น)
+router.post('/', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { username, email, password, role, name, firstname, lastname, address, faculty_id, department_id } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอก username และ password' });
+    }
+
+    const emailToUse = (email && email.trim()) ? email.trim() : username.trim();
+
+    const [existing] = await pool.query('SELECT id FROM `user` WHERE username = ? OR email = ?', [username, emailToUse]);
+    if (existing.length > 0) {
+      return res.status(409).json({ success: false, message: 'Username หรือ Email นี้ถูกใช้งานแล้ว' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password || '123456', 10);
+    const [result] = await pool.query(
+      'INSERT INTO `user` (username, email, password, role) VALUES (?, ?, ?, ?)',
+      [username, emailToUse, hashedPassword, role || 'student']
+    );
+
+    let fn = firstname || '';
+    let ln = lastname || '';
+    if (name && !fn && !ln) {
+      const parts = name.trim().split(/\s+/);
+      fn = parts[0] || '';
+      ln = parts.slice(1).join(' ') || '';
+    }
+
+    if (fn || ln || address || faculty_id || department_id) {
+      await pool.query(
+        `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [username, fn, ln, faculty_id || 0, department_id || 0, address || null]
+      );
+    }
+
+    const [newUser] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ?`, [result.insertId]);
+    res.status(201).json({ success: true, message: 'สร้างผู้ใช้สำเร็จ', data: toFrontendUser(newUser[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/users/import — นำเข้าผู้ใช้หลายคน (Admin)
+router.post('/import', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { users: userList } = req.body;
+    if (!Array.isArray(userList) || userList.length === 0) {
+      return res.status(400).json({ success: false, message: 'ไม่มีข้อมูลผู้ใช้' });
+    }
+
+    let created = 0;
+    const errors = [];
+
+    for (let i = 0; i < userList.length; i++) {
+      try {
+        const row = userList[i];
+        const [existing] = await pool.query('SELECT id FROM `user` WHERE username = ?', [row.username]);
+        if (existing.length > 0) {
+          errors.push({ index: i, message: `${row.username} ซ้ำกับผู้ใช้เดิม` });
+          continue;
+        }
+        const hashedPassword = await bcrypt.hash(row.password || '123456', 10);
+        await pool.query(
+          'INSERT INTO `user` (username, email, password, role) VALUES (?, ?, ?, ?)',
+          [row.username, row.email || row.username, hashedPassword, row.role || 'student']
+        );
+
+        let fn = row.firstname || '';
+        let ln = row.lastname || '';
+        if (row.name && !fn && !ln) {
+          const parts = row.name.trim().split(/\s+/);
+          fn = parts[0] || '';
+          ln = parts.slice(1).join(' ') || '';
+        }
+
+        if (fn || ln || row.address) {
+          await pool.query(
+            `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [row.username, fn, ln, row.faculty_id || 0, row.department_id || 0, typeof row.address === 'object' ? JSON.stringify(row.address) : (row.address || null)]
+          );
+        }
+
+        created++;
+      } catch (err) {
+        errors.push({ index: i, message: err.message });
+      }
+    }
+
+    res.json({ success: true, message: `เพิ่มผู้ใช้สำเร็จ ${created} รายการ`, created, errors });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PUT /api/users/:id — อัปเดตผู้ใช้
+router.put('/:id', authenticate, async (req, res) => {
+  try {
+    const [userRows] = await pool.query('SELECT * FROM `user` WHERE id = ?', [req.params.id]);
+    if (!userRows[0]) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
+    const current = userRows[0];
+
+    const allowedUserKeys = ['username', 'email', 'role', 'isActive'];
+    const userUpdates = [];
+    const userParams = [];
+
+    for (const key of allowedUserKeys) {
+      if (req.body[key] !== undefined) {
+        userUpdates.push(`\`${key}\` = ?`);
+        userParams.push(req.body[key]);
+      }
+    }
+    if (req.body.password) {
+      userUpdates.push('`password` = ?');
+      userParams.push(await bcrypt.hash(req.body.password, 10));
+    }
+
+    if (userUpdates.length > 0) {
+      userParams.push(req.params.id);
+      await pool.query(`UPDATE \`user\` SET ${userUpdates.join(', ')} WHERE id = ?`, userParams);
+    }
+
+    let fn = req.body.firstname;
+    let ln = req.body.lastname;
+    if (req.body.name && (fn === undefined || ln === undefined)) {
+      const parts = req.body.name.trim().split(/\s+/);
+      fn = parts[0] || '';
+      ln = parts.slice(1).join(' ') || '';
+    }
+
+    const profileId = req.body.username || current.username;
+    if (fn !== undefined || ln !== undefined || req.body.address !== undefined || req.body.faculty_id !== undefined || req.body.department_id !== undefined) {
+      const [pRows] = await pool.query('SELECT id FROM `profile` WHERE profile_id = ?', [profileId]);
+      if (pRows.length > 0) {
+        const pUpdates = [];
+        const pParams = [];
+        if (fn !== undefined) { pUpdates.push('`firstname` = ?'); pParams.push(fn); }
+        if (ln !== undefined) { pUpdates.push('`lastname` = ?'); pParams.push(ln); }
+        if (req.body.address !== undefined) { pUpdates.push('`address` = ?'); pParams.push(req.body.address); }
+        if (req.body.faculty_id !== undefined) { pUpdates.push('`faculty_id` = ?'); pParams.push(req.body.faculty_id); }
+        if (req.body.department_id !== undefined) { pUpdates.push('`department_id` = ?'); pParams.push(req.body.department_id); }
+        if (pUpdates.length > 0) {
+          pParams.push(pRows[0].id);
+          await pool.query(`UPDATE \`profile\` SET ${pUpdates.join(', ')} WHERE id = ?`, pParams);
+        }
+      } else {
+        await pool.query(
+          `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [profileId, fn || '', ln || '', req.body.faculty_id || 0, req.body.department_id || 0, req.body.address || null]
+        );
+      }
+    }
+
+    const [updated] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ?`, [req.params.id]);
+    res.json({ success: true, message: 'อัปเดตข้อมูลสำเร็จ', data: toFrontendUser(updated[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/users/:id — ลบผู้ใช้และข้อมูลทั้งหมดที่เกี่ยวข้อง (Admin เท่านั้น)
+router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const [userRows] = await pool.query('SELECT username, email FROM `user` WHERE id = ?', [req.params.id]);
+    if (!userRows[0]) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
+    const { username, email } = userRows[0];
+
+    const identifiers = [username, email].filter(Boolean);
+
+    // 1. ลบ requests และแบบประเมินที่เชื่อมโยง
+    const [reqRows] = await pool.query('SELECT id FROM requests WHERE studentId IN (?)', [identifiers]);
+    const reqIds = reqRows.map(r => r.id);
+    if (reqIds.length > 0) {
+      await pool.query('DELETE FROM advisor_evaluations WHERE requestId IN (?)', [reqIds]);
+      await pool.query('DELETE FROM evaluations WHERE requestId IN (?)', [reqIds]);
+      await pool.query('DELETE FROM requests WHERE id IN (?)', [reqIds]);
+    }
+
+    // 2. ลบ daily_checkins
+    await pool.query('DELETE FROM daily_checkins WHERE studentId IN (?)', [identifiers]);
+
+    // 3. ลบ payment_proofs
+    await pool.query('DELETE FROM payment_proofs WHERE studentId IN (?)', [identifiers]);
+
+    // 4. ลบ profile
+    await pool.query('DELETE FROM `profile` WHERE profile_id IN (?)', [identifiers]);
+
+    // 5. ลบ user
+    const [result] = await pool.query('DELETE FROM `user` WHERE id = ?', [req.params.id]);
+    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
+
+    res.json({ success: true, message: 'ลบผู้ใช้และข้อมูลทั้งหมดที่เกี่ยวข้องสำเร็จ' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+module.exports = router;

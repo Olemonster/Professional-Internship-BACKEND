@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "db:init": "node src/database/init.js"
+    "db:init": "node src/database/init.js",
+    "test:e2e": "node selenium_test_full_flow.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -19,6 +20,7 @@
     "node-cron": "^4.6.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.4"
+    "nodemon": "^3.1.4",
+    "selenium-webdriver": "^4.47.0"
   }
 }
