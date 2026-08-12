@@ -1,155 +1,186 @@
 # Professional Internship Backend API
 
-ระบบ Backend สำหรับบริหารจัดการฝึกงานนักศึกษา พัฒนาด้วย **Node.js + Express + MySQL** โดยรวมทุก business logic ไว้ใน `src/server.js` ไฟล์เดียว พร้อมสคริปต์ช่วยสร้างฐานข้อมูลและข้อมูลตัวอย่างสำหรับใช้งานทันที
+ระบบ Backend สำหรับบริหารจัดการการฝึกงานนักศึกษา พัฒนาด้วย **Node.js + Express + MySQL** ออกแบบด้วยสถาปัตยกรรม **Modular Architecture** แยก Layer ชัดเจน (Config, Middlewares, Routes, Utilities, Cron Jobs) พร้อมระบบทดสอบอัตโนมัติ **Selenium E2E**
 
-## Highlights
+---
 
-- ⚙️ RESTful API ครอบคลุมการจัดการผู้ใช้ คำร้อง ขออนุมัติ เช็คชื่อ และการชำระเงิน
-- 🗄️ ใช้ `mysql2/promise` สร้าง connection pool รองรับพร้อมกันหลายคำขอ
-- 🔐 JWT Authentication + Role-based Authorization (student, company, advisor, admin)
-- 🚀 `npm run db:init` สร้างฐานข้อมูล `internship_overall` และ seed บัญชีตัวอย่างให้อัตโนมัติ
-- 🌐 Endpoint สุขภาพ `/api/health` ตรวจสอบสถานะการทำงานของเซิร์ฟเวอร์ได้ทันที
+## 🌟 จุดเด่นของระบบ (Highlights)
 
-## โครงสร้างโปรเจกต์
+- 🏗️ **Modular Architecture**: โค้ดเป็นระเบียบ สั้นกระชับ แยกไฟล์ตามหน้าที่และ Resource
+- 🗄️ **Database Schema `internship_overall`**: ฐานข้อมูลมาตรฐาน 8 ตาราง เชื่อมโยง User และ Profile อย่างสมบูรณ์ พร้อมระบบ Cascade Deletion ป้องกันข้อมูลตกค้าง
+- 🔐 **JWT Auth & Role-based Access**: รองรับ 4 บทบาท (`student`, `advisor`, `admin`, `public/company`)
+- 🤖 **Selenium E2E Test Suite**: รันจำลองกระบวนการฝึกงานครบวงจรตั้งแต่ยื่นคำร้องจนจบการฝึกงานด้วยคำสั่งเดียว
+- ⏰ **Automated Cron Jobs**: ระบบตรวจสอบวันเริ่มฝึกงานและอนุมัติเปลี่ยนสถานะคำร้องอัตโนมัติ
+- 📊 **Evaluation Analytics**: ระบบประมวลผลสถิติและคะแนนประเมินนักศึกษาแยกตามสาขาวิชาและสถานประกอบการ
 
-```
-├── .env.example            # ตัวอย่าง environment variables
+---
+
+## 📁 โครงสร้างโปรเจกต์ (Project Structure)
+
+```text
+Professional-Internship-BACKEND/
+├── src/
+│   ├── config/
+│   │   └── db.js                 # MySQL Pool Configuration
+│   │
+│   ├── middlewares/
+│   │   └── auth.js               # JWT Verification & Role Authorization
+│   │
+│   ├── utils/
+│   │   └── helpers.js            # toFrontendUser, Query SQL, Parsers, Formatters
+│   │
+│   ├── routes/
+│   │   ├── authRoutes.js         # /api/auth (Login, Me)
+│   │   ├── userRoutes.js         # /api/users (CRUD Users, Import, Profile Sync)
+│   │   ├── requestRoutes.js      # /api/requests (คำร้อง, นัดหมายนิเทศ, ปรับสถานะ)
+│   │   ├── checkinRoutes.js      # /api/checkins (เช็คชื่อรายวัน & บันทึกงาน)
+│   │   ├── paymentRoutes.js      # /api/payments (หลักฐานการชำระเงิน)
+│   │   ├── evaluationRoutes.js   # /api/evaluations (แบบประเมินบริษัท & อาจารย์)
+│   │   ├── announcementRoutes.js # /api/announcements (ข่าวสารประชาสัมพันธ์)
+│   │   ├── companyRoutes.js      # /api/public/companies (แคตตาล็อกบริษัท)
+│   │   └── adminRoutes.js        # /api/admin (จัดการลบข้อมูลแบบกลุ่ม)
+│   │
+│   ├── cron/
+│   │   └── internshipCron.js     # Cron Job ตรวจสอบวันเริ่มฝึกงานอัตโนมัติ
+│   │
+│   └── server.js                 # Entry Point หลัก (87 บรรทัด)
+│
+├── internship_overall.sql        # Database Schema สำหรับ Deploy
+├── selenium_test_full_flow.js    # สคริปต์ทดสอบอัตโนมัติ Selenium E2E
 ├── package.json
-└── src/
-    ├── database/
-    │   ├── init.js        # สคริปต์สร้าง DB + seed ข้อมูล
-    │   ├── schema.sql     # คำสั่งสร้างตารางทั้งหมด
-    │   └── seed.sql       # (ออปชัน) สำหรับเติมข้อมูลเพิ่ม
-    └── server.js          # Express server (รวม middleware + routes)
+└── README.md
 ```
 
-> หมายเหตุ: โฟลเดอร์ controllers/models/middleware ถูกยุบรวมมาอยู่ใน `server.js` เพื่อลดความซับซ้อนและง่ายต่อการ deploy
+---
 
-## ความต้องการระบบ
+## ⚙️ ความต้องการของระบบ (Prerequisites)
 
-- Node.js 18+ (แนะนำ LTS)
-- MySQL 8.x (หรือ MariaDB ที่รองรับ `utf8mb4`)
+- **Node.js**: v18+ (แนะนำ Node.js v20 หรือ v22 LTS)
+- **MySQL**: 8.x (หรือ MariaDB 10.5+ รองรับ `utf8mb4_unicode_ci`)
+- **Google Chrome**: (สำหรับรัน Selenium E2E Test)
 
-## การติดตั้งและเริ่มต้นใช้งาน
+---
 
-### 1. ติดตั้ง dependencies
+## 🚀 การติดตั้งและเริ่มต้นใช้งาน (Getting Started)
 
+### 1. ติดตั้ง Dependencies
 ```bash
 npm install
 ```
 
 ### 2. ตั้งค่า Environment Variables
-
-คัดลอกไฟล์ตัวอย่างและปรับค่าที่ต้องการ
-
-```bash
-cp .env.example .env
+คัดลอกและสร้างไฟล์ `.env`:
+```env
+PORT=5000
+NODE_ENV=development
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=
+DB_NAME=internship_overall
+JWT_SECRET=your_jwt_secret_key
+JWT_EXPIRES_IN=7d
 ```
 
-| ตัวแปร | ค่าเริ่มต้น | รายละเอียด |
-|---------|-------------|-------------|
-| `PORT` | 5000 | พอร์ตที่ Express ใช้งาน |
-| `NODE_ENV` | development | โหมดรัน (development / production) |
-| `DB_HOST` | localhost | ที่อยู่เซิร์ฟเวอร์ MySQL |
-| `DB_PORT` | 3306 | พอร์ต MySQL |
-| `DB_USER` | root | ชื่อผู้ใช้ฐานข้อมูล |
-| `DB_PASSWORD` | your_password_here | รหัสผ่านฐานข้อมูล |
-| `DB_NAME` | internship_overall | ชื่อฐานข้อมูลหลัก |
-| `JWT_SECRET` | your_jwt_secret_key_here | คีย์สำหรับเซ็น JWT |
-| `JWT_EXPIRES_IN` | 7d | ระยะเวลาหมดอายุของโทเคน |
-
-### 3. สร้างฐานข้อมูลและ seed ข้อมูลเริ่มต้น
-
+### 3. นำเข้าฐานข้อมูล (Import Database)
+นำเข้าไฟล์ [internship_overall.sql](file:///g:/Professional%20Internship/Professional-Internship-BACKEND/internship_overall.sql) เข้าสู่ MySQL:
 ```bash
-npm run db:init
+mysql -u root -p internship_overall < internship_overall.sql
 ```
 
-คำสั่งนี้จะ:
-1. สร้างฐานข้อมูล `internship_overall`
-2. สร้างตารางทั้งหมดตาม `schema.sql`
-3. เพิ่มบัญชีทดสอบ เช่น `admin / admin123`, `advisor / password`, `student1 / password`, ฯลฯ
-
-### 4. รันเซิร์ฟเวอร์
-
+### 4. รันเซิร์ฟเวอร์ (Start Server)
 ```bash
-# Development (hot reload ด้วย nodemon)
+# โหมดพัฒนา (Hot-reload ด้วย Nodemon)
 npm run dev
 
-# Production
+# โหมด Production
 npm start
 ```
-
-ค่าเริ่มต้นเซิร์ฟเวอร์จะพร้อมใช้งานที่ `http://localhost:5000`
-
-## สคริปต์ npm
-
-| คำสั่ง | รายละเอียด |
-|---------|-------------|
-| `npm run dev` | รันเซิร์ฟเวอร์ด้วย nodemon ระหว่างพัฒนา |
-| `npm start` | รันเซิร์ฟเวอร์ด้วย Node.js ปกติ |
-| `npm run db:init` | เรียก `src/database/init.js` เพื่อสร้าง/รีเซ็ตฐานข้อมูล |
-
-## โครงสร้างฐานข้อมูล (สรุป)
-
-| ตาราง | จุดประสงค์หลัก |
-|-------|-----------------|
-| `users` | เก็บข้อมูลบัญชีทุกบทบาท พร้อมสถานะ `is_active` |
-| `requests` | คำร้องฝึกงานของนักศึกษา + สถานะภาษาไทย + comment admin/advisor |
-| `daily_checkins` | บันทึกการเช็คชื่อรายวัน (พร้อม unique key student/date) |
-| `payment_proofs` | หลักฐานการชำระเงิน + สถานะ `pending/approved/rejected` |
-
-รายละเอียดคอลัมน์ทั้งหมดดูได้จาก `src/database/schema.sql`
-
-## ภาพรวม API (สกัดจาก `server.js`)
-
-| หมวด | Endpoint | Method | สิทธิ์ |
-|-------|----------|--------|--------|
-| Health | `/api/health` | GET | Public |
-| Public Catalog | `/api/public/companies` | GET | Public |
-| Auth | `/api/auth/login` | POST | Public |
-| Auth | `/api/auth/me` | GET | ผู้ใช้ที่มีโทเคน |
-| Users | `/api/users` | GET | Authenticated (กรองได้ตาม role/department) |
-| Users | `/api/users/:id` | GET | Authenticated |
-| Users | `/api/users` | POST | Admin |
-| Users | `/api/users/import` | POST | Admin |
-| Users | `/api/users/:id` | PUT | เจ้าของข้อมูลหรือ Admin (ตรวจก่อนใน client) |
-| Users | `/api/users/:id` | DELETE | Admin |
-| Requests | `/api/requests` | GET | Authenticated |
-| Requests | `/api/requests/:id` | GET | Authenticated |
-| Requests | `/api/requests` | POST | Authenticated |
-| Requests | `/api/requests/:id/status` | PATCH | Authenticated (ตรวจบทบาท server-side) |
-| Requests | `/api/requests/:id` | DELETE | Authenticated |
-| Checkins | `/api/checkins` | GET | Authenticated |
-| Checkins | `/api/checkins/:id` | GET | Authenticated |
-| Checkins | `/api/checkins` | POST | Authenticated |
-| Checkins | `/api/checkins/:id` | DELETE | Authenticated |
-| Payments | `/api/payments` | GET | Authenticated |
-| Payments | `/api/payments/:id` | GET | Authenticated |
-| Payments | `/api/payments` | POST | Authenticated |
-| Payments | `/api/payments/:id/approve` | PATCH | Authenticated (ควรจำกัด admin ใน client) |
-| Payments | `/api/payments/:id/reject` | PATCH | Authenticated |
-
-> หมายเหตุ: แต่ละ endpoint มีการตรวจสอบสิทธิ์จริงผ่าน middleware `authenticate` และ `authorize` ภายใน `server.js` คุณสามารถปรับบทบาทที่อนุญาตได้ตามความต้องการ
-
-## Authentication
-
-- ใช้ JWT Bearer Token แนบใน Header: `Authorization: Bearer <token>`
-- Token ออกให้ผ่าน `POST /api/auth/login`
-- Middleware `authenticate` จะตรวจสอบโทเคนและแนบข้อมูลผู้ใช้ (`req.user`) ให้ API ถัดไป
-- ฟังก์ชัน `authorize(...roles)` ใช้จำกัดบทบาท (เช่น admin เท่านั้น) ก่อนเข้าถึงบาง endpoint
-
-## ข้อมูลสำหรับการทดสอบ (จาก `npm run db:init`)
-
-| บทบาท | Username | Password |
-|--------|----------|----------|
-| Admin | `admin` | `admin123` |
-| Advisor | `advisor` | `password` |
-| Student | `student1` / `student2` | `password` |
-| Company | `company1` | `password` |
-
-สามารถแก้ไข/เพิ่มบัญชีเพิ่มเติมได้ภายหลังผ่าน API Users หรือแก้ seed script ตามต้องการ
+เซิร์ฟเวอร์จะพร้อมใช้งานที่ `http://localhost:5000` (Health Check: `http://localhost:5000/api/health`)
 
 ---
 
-หากมีคำถามเพิ่มเติมหรือพบปัญหาในการใช้งาน โปรดเปิด issue หรือแจ้งผู้ดูแลโครงการ 🙌
+## 🧪 การทดสอบระบบ (Testing)
 
+### 1. รันการทดสอบ E2E อัตโนมัติด้วย Selenium
+ทดสอบจำลองผู้ใช้งานจริงครบทุก Role บนเบราว์เซอร์ Chrome:
+```bash
+npm run test:e2e
+```
+*ระบบจะทำการ seed บัญชีทดสอบ เคลียร์ข้อมูลเก่า และจำลองการทำงานตั้งแต่สร้างคำร้องจนประเมินผลเสร็จสิ้น (11/11 ขั้นตอน)*
+
+---
+
+## 🗄️ โครงสร้างฐานข้อมูล `internship_overall` (8 ตาราง)
+
+| # | ตาราง | หน้าที่หลัก |
+|---|---|---|
+| 1 | `user` | บัญชีผู้ใช้งาน (`username`, `email`, `password`, `role`, `isActive`) |
+| 2 | `profile` | ข้อมูลโปรไฟล์ (`profile_id`, `firstname`, `lastname`, `address`) |
+| 3 | `requests` | ข้อมูลคำร้องฝึกงาน, สถานะ, หนังสือนำส่ง, วันนัดนิเทศ |
+| 4 | `announcements` | ข่าวสารและประกาศประชาสัมพันธ์ |
+| 5 | `daily_checkins` | บันทึกการเข้างานรายวันและบันทึกประสบการณ์การทำงาน |
+| 6 | `evaluations` | ผลการประเมินนักศึกษาจากสถานประกอบการ (20 ข้อ + ความเห็น) |
+| 7 | `advisor_evaluations` | ผลการประเมินการนิเทศจากอาจารย์ที่ปรึกษา |
+| 8 | `payment_proofs` | หลักฐานสลิปการชำระเงินค่าธรรมเนียมฝึกงาน |
+
+---
+
+## 📡 รายการ RESTful API Endpoints
+
+### 🔐 Authentication
+- `POST /api/auth/login` — เข้าสู่ระบบ (รับ JWT Token + User Data)
+- `GET /api/auth/me` — ดึงข้อมูลโปรไฟล์ผู้ใช้ปัจจุบัน
+
+### 👥 Users Management
+- `GET /api/users` — ดึงรายชื่อผู้ใช้ทั้งหมด (กรองตาม role / ค้นหา)
+- `GET /api/users/:id` — ดึงข้อมูลผู้ใช้รายบุคคล
+- `POST /api/users` — สร้างผู้ใช้ใหม่ (Admin)
+- `POST /api/users/import` — นำเข้าผู้ใช้แบบกลุ่ม (Admin)
+- `PUT /api/users/:id` — อัปเดตข้อมูลผู้ใช้และโปรไฟล์
+- `DELETE /api/users/:id` — ลบผู้ใช้พร้อมข้อมูลที่เกี่ยวข้องทั้งหมด (Cascade)
+
+### 📝 Requests (คำร้องขอฝึกงาน)
+- `GET /api/requests` — ดึงรายการคำร้องทั้งหมด (กรองตาม studentId / status / dept)
+- `GET /api/requests/:id` — ดึงรายละเอียดคำร้อง
+- `POST /api/requests` — ยื่นคำร้องใหม่
+- `PUT /api/requests/:id` — แก้ไขคำร้อง
+- `PATCH /api/requests/:id/status` — อัปเดตสถานะคำร้องและคอมเมนต์
+- `PATCH /api/requests/:id/appointment` — กำหนดวันนัดหมายนิเทศงาน
+- `DELETE /api/requests/:id` — ลบคำร้อง
+
+### 🕒 Daily Check-ins (การเช็คชื่อ)
+- `GET /api/checkins` — ดึงประวัติการเช็คชื่อ
+- `POST /api/checkins` — บันทึกการเช็คชื่อและงานรายวัน (1 ครั้ง/วัน)
+- `DELETE /api/checkins/:id` — ลบรายการเช็คชื่อ
+
+### 💳 Payments (การชำระเงิน)
+- `GET /api/payments` — ดึงรายการหลักฐานชำระเงิน
+- `POST /api/payments` — อัปโหลดสลิปชำระเงิน
+- `PATCH /api/payments/:id/approve` — อนุมัติสลิปชำระเงิน (Admin)
+- `PATCH /api/payments/:id/reject` — ปฏิเสธสลิปชำระเงิน (Admin)
+
+### 📊 Evaluations (การประเมินผล)
+- `GET /api/public/evaluate/request/:id` — ข้อมูลคำร้องสำหรับแบบประเมินบริษัท (Public)
+- `POST /api/public/evaluate/:id` — บันทึกแบบประเมินจากบริษัท (Public)
+- `GET /api/advisor-evaluations/request/:id` — ดึงแบบประเมินของอาจารย์
+- `POST /api/advisor-evaluations/request/:id` — บันทึกแบบประเมินของอาจารย์
+- `GET /api/evaluations/analytics` — รายงานสรุปคะแนนประเมินและสถิติการรับเข้าทำงาน (Admin)
+
+### 📢 Announcements & Public
+- `GET /api/public/announcements` — ข่าวประชาสัมพันธ์หน้าแรก (Public)
+- `GET /api/public/companies` — แคตตาล็อกบริษัทจากรุ่นพี่ที่ฝึกงานเสร็จแล้ว (Public)
+- `GET /api/announcements` — รายการข่าวทั้งหมด (Admin)
+- `POST /api/announcements` — เพิ่มข่าวใหม่ (Admin)
+- `PUT /api/announcements/:id` — แก้ไขข่าว (Admin)
+- `DELETE /api/announcements/:id` — ลบข่าว (Admin)
+
+---
+
+## 🔑 บัญชีทดสอบเริ่มต้น (Default Test Accounts)
+
+| Role | Username | Password | ชื่อ - นามสกุล |
+|---|---|---|---|
+| **Admin** | `admin` | `admin123` | ผู้ดูแล ระบบ |
+| **Advisor** | `advisor01` | `advisor123` | ดร.สมเกียรติ มงคลชัย |
+| **Student** | `student6501` | `student123` | สมชาย รักเรียน |
