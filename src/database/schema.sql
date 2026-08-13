@@ -40,6 +40,17 @@ CREATE TABLE IF NOT EXISTS `user` (
   UNIQUE KEY `User_email_key` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+ALTER TABLE `user` MODIFY COLUMN `role` ENUM('student', 'alumni', 'admin', 'advisor', 'company') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'student';
+ALTER TABLE `user` MODIFY COLUMN `email` VARCHAR(191) COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `name` VARCHAR(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่อ-นามสกุล';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `studentId` VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'รหัสนักศึกษา';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `department` VARCHAR(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'สาขาวิชา';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `address` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `phone` VARCHAR(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `contactPerson` VARCHAR(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ผู้ติดต่อ (สำหรับบริษัท)';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `avatar` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'base64 avatar หรือ URL';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `is_active` TINYINT(1) NOT NULL DEFAULT 1;
+
 -- ------------------------------------------------------------
 -- 2. Structure for table `profile` (จาก internship_overall.sql)
 -- ------------------------------------------------------------
@@ -176,13 +187,13 @@ CREATE TABLE IF NOT EXISTS `advisor_evaluations` (
 -- ------------------------------------------------------------
 -- Indexes
 -- ------------------------------------------------------------
-CREATE INDEX `idx_user_role` ON `user`(`role`);
-CREATE INDEX `idx_user_studentId` ON `user`(`studentId`);
-CREATE INDEX `idx_requests_studentId` ON `requests`(`studentId`);
-CREATE INDEX `idx_requests_status` ON `requests`(`status`);
-CREATE INDEX `idx_daily_checkins_studentId` ON `daily_checkins`(`studentId`);
-CREATE INDEX `idx_daily_checkins_date` ON `daily_checkins`(`date`);
-CREATE INDEX `idx_payment_proofs_studentId` ON `payment_proofs`(`studentId`);
-CREATE INDEX `idx_payment_proofs_status` ON `payment_proofs`(`status`);
-CREATE INDEX `idx_evaluations_requestId` ON `evaluations`(`requestId`);
-CREATE INDEX `idx_advisor_evaluations_requestId` ON `advisor_evaluations`(`requestId`);
+CREATE INDEX IF NOT EXISTS `idx_user_role` ON `user`(`role`);
+CREATE INDEX IF NOT EXISTS `idx_user_studentId` ON `user`(`studentId`);
+CREATE INDEX IF NOT EXISTS `idx_requests_studentId` ON `requests`(`studentId`);
+CREATE INDEX IF NOT EXISTS `idx_requests_status` ON `requests`(`status`);
+CREATE INDEX IF NOT EXISTS `idx_daily_checkins_studentId` ON `daily_checkins`(`studentId`);
+CREATE INDEX IF NOT EXISTS `idx_daily_checkins_date` ON `daily_checkins`(`date`);
+CREATE INDEX IF NOT EXISTS `idx_payment_proofs_studentId` ON `payment_proofs`(`studentId`);
+CREATE INDEX IF NOT EXISTS `idx_payment_proofs_status` ON `payment_proofs`(`status`);
+CREATE INDEX IF NOT EXISTS `idx_evaluations_requestId` ON `evaluations`(`requestId`);
+CREATE INDEX IF NOT EXISTS `idx_advisor_evaluations_requestId` ON `advisor_evaluations`(`requestId`);

@@ -3,7 +3,7 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const pool = require('../config/db');
 const { authenticate, authorize } = require('../middlewares/auth');
-const { toFrontendUser, USER_SELECT_SQL } = require('../utils/helpers');
+const { toFrontendUser, USER_SELECT_SQL, DEPARTMENT_MAP, DEPARTMENT_NAME_TO_ID } = require('../utils/helpers');
 
 // GET /api/users — ดึงผู้ใช้ทั้งหมด
 router.get('/', authenticate, async (req, res) => {
@@ -41,7 +41,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // POST /api/users — สร้างผู้ใช้ใหม่ (Admin เท่านั้น)
 router.post('/', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { username, email, password, role, name, firstname, lastname, address, faculty_id, department_id } = req.body;
+    const { username, email, password, role, name, firstname, lastname, address, faculty_id, department_id, department } = req.body;
 
     if (!username || !password) {
       return res.status(400).json({ success: false, message: 'กรุณากรอก username และ password' });
@@ -54,10 +54,13 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
       return res.status(409).json({ success: false, message: 'Username หรือ Email นี้ถูกใช้งานแล้ว' });
     }
 
+    const targetDeptId = department_id ? Number(department_id) : (department ? (DEPARTMENT_NAME_TO_ID[department] || 0) : 0);
+    const targetDeptName = department || (targetDeptId && DEPARTMENT_MAP[targetDeptId] ? DEPARTMENT_MAP[targetDeptId] : '');
+
     const hashedPassword = await bcrypt.hash(password || '123456', 10);
     const [result] = await pool.query(
-      'INSERT INTO `user` (username, email, password, role) VALUES (?, ?, ?, ?)',
-      [username, emailToUse, hashedPassword, role || 'student']
+      'INSERT INTO `user` (username, email, password, role, department) VALUES (?, ?, ?, ?, ?)',
+      [username, emailToUse, hashedPassword, role || 'student', targetDeptName || null]
     );
 
     let fn = firstname || '';
@@ -68,11 +71,11 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
       ln = parts.slice(1).join(' ') || '';
     }
 
-    if (fn || ln || address || faculty_id || department_id) {
+    if (fn || ln || address || faculty_id || targetDeptId) {
       await pool.query(
         `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
          VALUES (?, ?, ?, ?, ?, ?)`,
-        [username, fn, ln, faculty_id || 0, department_id || 0, address || null]
+        [username, fn, ln, faculty_id || 0, targetDeptId, address || null]
       );
     }
 
@@ -102,10 +105,14 @@ router.post('/import', authenticate, authorize('admin'), async (req, res) => {
           errors.push({ index: i, message: `${row.username} ซ้ำกับผู้ใช้เดิม` });
           continue;
         }
+
+        const targetDeptId = row.department_id ? Number(row.department_id) : (row.department ? (DEPARTMENT_NAME_TO_ID[row.department] || 0) : 0);
+        const targetDeptName = row.department || (targetDeptId && DEPARTMENT_MAP[targetDeptId] ? DEPARTMENT_MAP[targetDeptId] : '');
+
         const hashedPassword = await bcrypt.hash(row.password || '123456', 10);
         await pool.query(
-          'INSERT INTO `user` (username, email, password, role) VALUES (?, ?, ?, ?)',
-          [row.username, row.email || row.username, hashedPassword, row.role || 'student']
+          'INSERT INTO `user` (username, email, password, role, department) VALUES (?, ?, ?, ?, ?)',
+          [row.username, row.email || row.username, hashedPassword, row.role || 'student', targetDeptName || null]
         );
 
         let fn = row.firstname || '';
@@ -116,11 +123,11 @@ router.post('/import', authenticate, authorize('admin'), async (req, res) => {
           ln = parts.slice(1).join(' ') || '';
         }
 
-        if (fn || ln || row.address) {
+        if (fn || ln || row.address || targetDeptId) {
           await pool.query(
             `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
              VALUES (?, ?, ?, ?, ?, ?)`,
-            [row.username, fn, ln, row.faculty_id || 0, row.department_id || 0, typeof row.address === 'object' ? JSON.stringify(row.address) : (row.address || null)]
+            [row.username, fn, ln, row.faculty_id || 0, targetDeptId, typeof row.address === 'object' ? JSON.stringify(row.address) : (row.address || null)]
           );
         }
 
@@ -153,6 +160,15 @@ router.put('/:id', authenticate, async (req, res) => {
         userParams.push(req.body[key]);
       }
     }
+
+    let targetDeptId = req.body.department_id !== undefined ? Number(req.body.department_id) : (req.body.department ? DEPARTMENT_NAME_TO_ID[req.body.department] : undefined);
+    let targetDeptName = req.body.department !== undefined ? req.body.department : (targetDeptId && DEPARTMENT_MAP[targetDeptId] ? DEPARTMENT_MAP[targetDeptId] : undefined);
+
+    if (targetDeptName !== undefined) {
+      userUpdates.push('`department` = ?');
+      userParams.push(targetDeptName);
+    }
+
     if (req.body.password) {
       userUpdates.push('`password` = ?');
       userParams.push(await bcrypt.hash(req.body.password, 10));
@@ -172,7 +188,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const profileId = req.body.username || current.username;
-    if (fn !== undefined || ln !== undefined || req.body.address !== undefined || req.body.faculty_id !== undefined || req.body.department_id !== undefined) {
+    if (fn !== undefined || ln !== undefined || req.body.address !== undefined || req.body.faculty_id !== undefined || targetDeptId !== undefined) {
       const [pRows] = await pool.query('SELECT id FROM `profile` WHERE profile_id = ?', [profileId]);
       if (pRows.length > 0) {
         const pUpdates = [];
@@ -181,7 +197,7 @@ router.put('/:id', authenticate, async (req, res) => {
         if (ln !== undefined) { pUpdates.push('`lastname` = ?'); pParams.push(ln); }
         if (req.body.address !== undefined) { pUpdates.push('`address` = ?'); pParams.push(req.body.address); }
         if (req.body.faculty_id !== undefined) { pUpdates.push('`faculty_id` = ?'); pParams.push(req.body.faculty_id); }
-        if (req.body.department_id !== undefined) { pUpdates.push('`department_id` = ?'); pParams.push(req.body.department_id); }
+        if (targetDeptId !== undefined) { pUpdates.push('`department_id` = ?'); pParams.push(targetDeptId); }
         if (pUpdates.length > 0) {
           pParams.push(pRows[0].id);
           await pool.query(`UPDATE \`profile\` SET ${pUpdates.join(', ')} WHERE id = ?`, pParams);
@@ -190,7 +206,7 @@ router.put('/:id', authenticate, async (req, res) => {
         await pool.query(
           `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [profileId, fn || '', ln || '', req.body.faculty_id || 0, req.body.department_id || 0, req.body.address || null]
+          [profileId, fn || '', ln || '', req.body.faculty_id || 0, targetDeptId || 0, req.body.address || null]
         );
       }
     }

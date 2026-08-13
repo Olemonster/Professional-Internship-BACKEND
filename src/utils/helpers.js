@@ -1,8 +1,36 @@
+const DEPARTMENT_MAP = {
+  1: 'สาขาวิชาวิทยาการคอมพิวเตอร์',
+  2: 'สาขาวิชาเทคโนโลยีคอมพิวเตอร์และดิจิทัล',
+  3: 'สาขาวิชาสาธารณสุขชุมชน',
+  4: 'สาขาวิชาวิทยาศาสตร์การกีฬา',
+  5: 'สาขาวิชาเทคโนโลยีการเกษตร',
+  6: 'สาขาวิชาเทคโนโลยีและนวัตกรรมอาหาร',
+  7: 'สาขาวิชาอาชีวอนามัยและความปลอดภัย',
+  8: 'สาขาวิชาวิศวกรรมซอฟต์แวร์',
+  9: 'สาขาวิชาวิศวกรรมโลจิสติกส์',
+  10: 'สาขาวิศวกรรมการจัดการอุตสาหกรรมและสิ่งแวดล้อม',
+  11: 'สาขาวิชาการออกแบบผลิตภัณฑ์และนวัตกรรมวัสดุ',
+  12: 'สาขาวิชาเทคโนโลยีโยธาและสถาปัตยกรรม',
+};
+
+const DEPARTMENT_NAME_TO_ID = Object.entries(DEPARTMENT_MAP).reduce((acc, [id, name]) => {
+  acc[name] = Number(id);
+  return acc;
+}, {});
+
 const toFrontendUser = (row) => {
   if (!row) return null;
   const fullName = (row.firstname && row.lastname)
     ? `${row.firstname} ${row.lastname}`.trim()
     : (row.name || row.username);
+
+  const deptId = row.department_id
+    ? Number(row.department_id)
+    : (row.department ? (DEPARTMENT_NAME_TO_ID[row.department] || null) : null);
+
+  const deptName = row.department
+    ? row.department
+    : (deptId && DEPARTMENT_MAP[deptId] ? DEPARTMENT_MAP[deptId] : '');
 
   return {
     id:            String(row.id),
@@ -11,14 +39,14 @@ const toFrontendUser = (row) => {
     name:          fullName,
     full_name:     fullName,
     role:          row.role,
-    studentId:     row.profile_id || (row.role === 'student' ? row.username : ''),
-    student_code:  row.profile_id || (row.role === 'student' ? row.username : ''),
+    studentId:     row.profile_id || row.studentId || (row.role === 'student' ? row.username : ''),
+    student_code:  row.profile_id || row.studentId || (row.role === 'student' ? row.username : ''),
     firstname:     row.firstname || '',
     lastname:      row.lastname || '',
     faculty_id:    row.faculty_id || null,
-    department_id: row.department_id || null,
-    department:    row.department || '',
-    major:         row.department || '',
+    department_id: deptId,
+    department:    deptName,
+    major:         deptName,
     address:       row.address || row.profile_address || '',
     phone:         row.phone || '',
     avatar:        row.avatar || null,
@@ -33,7 +61,7 @@ const USER_SELECT_SQL = `
   SELECT u.*, 
          p.profile_id, p.firstname, p.lastname, p.faculty_id, p.department_id, p.address AS profile_address
   FROM \`user\` u
-  LEFT JOIN \`profile\` p ON (p.profile_id = u.username OR p.profile_id = u.email)
+  LEFT JOIN \`profile\` p ON (p.profile_id = u.username OR p.profile_id = u.email OR (u.studentId IS NOT NULL AND u.studentId != '' AND p.profile_id = u.studentId))
 `;
 
 const parseRequestRow = (row) => {
@@ -84,6 +112,8 @@ const addCompanyEntry = (map, entry) => {
 };
 
 module.exports = {
+  DEPARTMENT_MAP,
+  DEPARTMENT_NAME_TO_ID,
   toFrontendUser,
   USER_SELECT_SQL,
   parseRequestRow,
