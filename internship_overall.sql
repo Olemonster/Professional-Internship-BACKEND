@@ -10,18 +10,10 @@ START TRANSACTION;
 SET time_zone = "+00:00";
 SET NAMES utf8mb4;
 
--- DROP existing tables (in reverse FK order)
-DROP TABLE IF EXISTS `advisor_evaluations`;
-DROP TABLE IF EXISTS `evaluations`;
-DROP TABLE IF EXISTS `payment_proofs`;
-DROP TABLE IF EXISTS `daily_checkins`;
-DROP TABLE IF EXISTS `announcements`;
-DROP TABLE IF EXISTS `requests`;
-DROP TABLE IF EXISTS `profile`;
-DROP TABLE IF EXISTS `user`;
+-- Safe table creation (will NOT drop existing tables or delete data)
 
 -- 1. user
-CREATE TABLE `user` (
+CREATE TABLE IF NOT EXISTS `user` (
   `id`        int(11)      NOT NULL AUTO_INCREMENT,
   `username`  varchar(191) NOT NULL,
   `email`     varchar(191) NOT NULL,
@@ -36,7 +28,7 @@ CREATE TABLE `user` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. profile
-CREATE TABLE `profile` (
+CREATE TABLE IF NOT EXISTS `profile` (
   `id`            int(11)      NOT NULL AUTO_INCREMENT,
   `profile_id`    varchar(191) NOT NULL,
   `firstname`     varchar(100) NOT NULL DEFAULT '',
@@ -49,7 +41,7 @@ CREATE TABLE `profile` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 3. requests
-CREATE TABLE `requests` (
+CREATE TABLE IF NOT EXISTS `requests` (
   `id`                     int(11)      NOT NULL AUTO_INCREMENT,
   `studentId`              varchar(50)  NOT NULL,
   `studentName`            varchar(255) DEFAULT NULL,
@@ -71,7 +63,7 @@ CREATE TABLE `requests` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 4. announcements
-CREATE TABLE `announcements` (
+CREATE TABLE IF NOT EXISTS `announcements` (
   `id`         int(11)      NOT NULL AUTO_INCREMENT,
   `title`      varchar(500) NOT NULL,
   `content`    text         NOT NULL,
@@ -86,7 +78,7 @@ CREATE TABLE `announcements` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 5. daily_checkins
-CREATE TABLE `daily_checkins` (
+CREATE TABLE IF NOT EXISTS `daily_checkins` (
   `id`              int(11)      NOT NULL AUTO_INCREMENT,
   `studentId`       varchar(50)  NOT NULL,
   `studentName`     varchar(255) DEFAULT NULL,
@@ -102,7 +94,7 @@ CREATE TABLE `daily_checkins` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. evaluations
-CREATE TABLE `evaluations` (
+CREATE TABLE IF NOT EXISTS `evaluations` (
   `id`                   int(11)      NOT NULL AUTO_INCREMENT,
   `requestId`            int(11)      NOT NULL,
   `studentId`            varchar(50)  NOT NULL,
@@ -130,7 +122,7 @@ CREATE TABLE `evaluations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 7. advisor_evaluations
-CREATE TABLE `advisor_evaluations` (
+CREATE TABLE IF NOT EXISTS `advisor_evaluations` (
   `id`              int(11)      NOT NULL AUTO_INCREMENT,
   `requestId`       int(11)      NOT NULL,
   `advisorName`     varchar(255) DEFAULT NULL,
@@ -156,7 +148,7 @@ CREATE TABLE `advisor_evaluations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 8. payment_proofs
-CREATE TABLE `payment_proofs` (
+CREATE TABLE IF NOT EXISTS `payment_proofs` (
   `id`           int(11)      NOT NULL AUTO_INCREMENT,
   `studentId`    varchar(50)  NOT NULL,
   `studentName`  varchar(255) DEFAULT NULL,
