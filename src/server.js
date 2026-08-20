@@ -59,6 +59,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/requests', requestRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/payment-proofs', paymentRoutes);
 app.use('/api', evaluationRoutes);
 app.use('/api', announcementRoutes);
 app.use('/api/public', companyRoutes);
