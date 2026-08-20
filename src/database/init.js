@@ -24,20 +24,12 @@ async function initDatabase() {
     await connection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
     await connection.query(`USE \`${dbName}\``);
 
-    // 1. อ่านและรัน internship_overall.sql ถ้ามีอยู่
-    const overallSqlPath = path.join(__dirname, '../../internship_overall.sql');
-    if (fs.existsSync(overallSqlPath)) {
-      const overallSql = fs.readFileSync(overallSqlPath, 'utf8');
-      await connection.query(overallSql);
-      console.log('✅ โหลดตารางจาก internship_overall.sql สำเร็จ');
-    }
-
-    // 2. อ่านและรัน SQL schema เพื่อเติมตารางเพิ่มเติมที่ระบบต้องใช้งาน
+    // 1. อ่านและรัน SQL schema หลักของระบบ
     const schemaPath = path.join(__dirname, 'schema.sql');
     if (fs.existsSync(schemaPath)) {
       const sql = fs.readFileSync(schemaPath, 'utf8');
       await connection.query(sql);
-      console.log('✅ สร้าง/เสริมตารางฐานข้อมูลสำเร็จ');
+      console.log('✅ สร้างตารางฐานข้อมูลหลักสำเร็จ');
     }
     const adminPassword = await bcrypt.hash('admin123', 10);
     await connection.query(
