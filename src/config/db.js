@@ -13,4 +13,15 @@ const pool = mysql.createPool({
   charset: 'utf8mb4',
 });
 
+// Auto-migration helper to guarantee studentId column exists for backward compatibility
+(async () => {
+  try {
+    const conn = await pool.getConnection();
+    await conn.query("ALTER TABLE `user` ADD COLUMN `studentId` VARCHAR(191) DEFAULT NULL").catch(() => {});
+    conn.release();
+  } catch (err) {
+    console.error('Database initialization notice:', err.message);
+  }
+})();
+
 module.exports = pool;

@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS `user` (
   `id`        int(11)      NOT NULL AUTO_INCREMENT,
   `username`  varchar(191) NOT NULL,
   `email`     varchar(191) NOT NULL,
+  `studentId` varchar(191) DEFAULT NULL,
   `password`  varchar(191) NOT NULL,
   `role`      enum('student','alumni','admin','advisor') NOT NULL DEFAULT 'student',
   `isActive`  tinyint(1)   NOT NULL DEFAULT 1,
@@ -24,7 +25,8 @@ CREATE TABLE IF NOT EXISTS `user` (
   `updatedAt` datetime(3)  NOT NULL DEFAULT current_timestamp(3) ON UPDATE current_timestamp(3),
   PRIMARY KEY (`id`),
   UNIQUE KEY `User_username_key` (`username`),
-  UNIQUE KEY `User_email_key` (`email`)
+  UNIQUE KEY `User_email_key` (`email`),
+  KEY `User_studentId_idx` (`studentId`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 2. profile
