@@ -19,6 +19,8 @@ const pool = mysql.createPool({
     const conn = await pool.getConnection();
     await conn.query("ALTER TABLE `user` ADD COLUMN `studentId` VARCHAR(191) DEFAULT NULL").catch(() => {});
     await conn.query("ALTER TABLE `user` ADD COLUMN `department` VARCHAR(191) DEFAULT NULL").catch(() => {});
+    await conn.query("CREATE TABLE IF NOT EXISTS `profile` (`id` INT(11) NOT NULL AUTO_INCREMENT, `profile_id` VARCHAR(191) NOT NULL, `firstname` VARCHAR(100) DEFAULT NULL, `lastname` VARCHAR(100) DEFAULT NULL, `faculty_id` INT(11) DEFAULT 0, `department_id` INT(11) DEFAULT 0, `address` TEXT DEFAULT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").catch(() => {});
+    await conn.query("CREATE OR REPLACE VIEW `users` AS SELECT * FROM `user`").catch(() => {});
     await conn.query("SET GLOBAL max_allowed_packet = 67108864").catch(() => {});
     conn.release();
   } catch (err) {

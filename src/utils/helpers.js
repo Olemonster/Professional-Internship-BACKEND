@@ -59,7 +59,12 @@ const toFrontendUser = (row) => {
 
 const USER_SELECT_SQL = `
   SELECT u.*, 
-         p.profile_id, p.firstname, p.lastname, p.faculty_id, p.department_id, p.address AS profile_address
+         MAX(p.profile_id) AS profile_id, 
+         MAX(p.firstname) AS firstname, 
+         MAX(p.lastname) AS lastname, 
+         MAX(p.faculty_id) AS faculty_id, 
+         MAX(p.department_id) AS department_id, 
+         MAX(p.address) AS profile_address
   FROM \`user\` u
   LEFT JOIN \`profile\` p ON (p.profile_id = u.username OR p.profile_id = u.email OR (u.studentId IS NOT NULL AND u.studentId != '' AND p.profile_id = u.studentId))
 `;
