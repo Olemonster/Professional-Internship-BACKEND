@@ -21,7 +21,21 @@ router.get('/', authenticate, async (req, res) => {
 
     sql += ' GROUP BY u.id ORDER BY u.createdAt DESC';
     const [rows] = await pool.query(sql, params);
-    res.json({ success: true, data: rows.map(toFrontendUser) });
+    let users = rows.map(toFrontendUser);
+
+    if (role === 'student') {
+      users = users.filter(student => {
+        const code = String(student.student_code || student.studentId || student.username || '').trim();
+        const hasYear66 = code.startsWith('66');
+        const deptId = student.department_id;
+        const hasNumericDeptId = deptId !== null && deptId !== undefined && deptId !== '' && !isNaN(deptId) && Number(deptId) > 0;
+        const deptName = String(student.department || student.major || '').trim();
+        const hasDeptName = deptName !== '' && deptName !== '-';
+        return hasYear66 || hasNumericDeptId || hasDeptName;
+      });
+    }
+
+    res.json({ success: true, data: users });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
