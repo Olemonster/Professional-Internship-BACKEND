@@ -39,8 +39,8 @@ const toFrontendUser = (row) => {
     name:          fullName,
     full_name:     fullName,
     role:          row.role,
-    studentId:     row.profile_id || row.studentId || (row.role === 'student' ? row.username : ''),
-    student_code:  row.profile_id || row.studentId || (row.role === 'student' ? row.username : ''),
+    studentId:     row.profile_id || (row.role === 'student' ? row.username : ''),
+    student_code:  row.profile_id || (row.role === 'student' ? row.username : ''),
     firstname:     row.firstname || '',
     lastname:      row.lastname || '',
     faculty_id:    row.faculty_id || null,
@@ -61,7 +61,7 @@ const USER_SELECT_SQL = `
   SELECT u.*, 
          p.profile_id, p.firstname, p.lastname, p.faculty_id, p.department_id, p.address AS profile_address
   FROM \`user\` u
-  LEFT JOIN \`profile\` p ON (p.profile_id = u.username OR p.profile_id = u.email OR (u.studentId IS NOT NULL AND u.studentId != '' AND p.profile_id = u.studentId))
+  LEFT JOIN \`profile\` p ON (p.profile_id = u.username OR p.profile_id = u.email)
 `;
 
 const parseRequestRow = (row) => {
