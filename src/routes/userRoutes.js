@@ -19,7 +19,7 @@ router.get('/', authenticate, async (req, res) => {
       params.push(s, s, s, s, s);
     }
 
-    sql += ' ORDER BY u.createdAt DESC';
+    sql += ' GROUP BY u.id ORDER BY u.createdAt DESC';
     const [rows] = await pool.query(sql, params);
     res.json({ success: true, data: rows.map(toFrontendUser) });
   } catch (error) {

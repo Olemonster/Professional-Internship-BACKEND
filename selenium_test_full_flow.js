@@ -39,11 +39,18 @@ async function seedTestUsers() {
       ON DUPLICATE KEY UPDATE password = VALUES(password), role = VALUES(role), isActive = 1
     `, [u.username, u.email, hash, u.role]);
 
-    await c.query(`
-      INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
-      VALUES (?, ?, ?, 1, 1, '99/1 หมู่ 5 ถ.พหลโยธิน คลองหลวง ปทุมธานี')
-      ON DUPLICATE KEY UPDATE firstname = VALUES(firstname), lastname = VALUES(lastname)
-    `, [u.username, u.firstname, u.lastname]);
+    const [pExisting] = await c.query('SELECT id FROM `profile` WHERE profile_id = ?', [u.username]);
+    if (pExisting.length > 0) {
+      await c.query(`
+        UPDATE \`profile\` SET firstname = ?, lastname = ?, faculty_id = 1, department_id = 1, address = '99/1 หมู่ 5 ถ.พหลโยธิน คลองหลวง ปทุมธานี'
+        WHERE id = ?
+      `, [u.firstname, u.lastname, pExisting[0].id]);
+    } else {
+      await c.query(`
+        INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
+        VALUES (?, ?, ?, 1, 1, '99/1 หมู่ 5 ถ.พหลโยธิน คลองหลวง ปทุมธานี')
+      `, [u.username, u.firstname, u.lastname]);
+    }
   }
   await c.end();
 }
