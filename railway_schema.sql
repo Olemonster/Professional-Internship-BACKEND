@@ -1,21 +1,14 @@
 -- ============================================================
--- SQL Schema สำหรับ Import/Deploy บน Railway Database
--- ดัดแปลงจาก internship_overall.sql + Backend System Requirements
--- ใช้ชื่อตาราง `user` (เอกพจน์) แทน `users`
+-- SQL Schema สำหรับ Import/Deploy บน Railway / Cloud Database
 -- ============================================================
 
--- หมายเหตุสำหรับ Railway: หากเชื่อมต่อกับ MySQL Database ของ Railway โดยตรง
--- ระบบจะสร้างและเลือก Database ให้ตามความต้องการ (เช่น MYSQLDATABASE / DB_NAME)
--- สามารถเลือกที่จะข้าม CREATE DATABASE / USE ได้ตามการตั้งค่าของ Railway
 CREATE DATABASE IF NOT EXISTS `internship_overall`
   DEFAULT CHARACTER SET utf8mb4
   DEFAULT COLLATE utf8mb4_unicode_ci;
 
 USE `internship_overall`;
 
--- ------------------------------------------------------------
--- 1. Structure for table `user` (รวมโครงสร้างจาก internship_overall และ Backend API)
--- ------------------------------------------------------------
+-- 1. Structure for table `user`
 CREATE TABLE IF NOT EXISTS `user` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
   `username` VARCHAR(191) COLLATE utf8mb4_unicode_ci NOT NULL,
@@ -40,9 +33,18 @@ CREATE TABLE IF NOT EXISTS `user` (
   UNIQUE KEY `User_email_key` (`email`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 2. Structure for table `profile` (จาก internship_overall.sql)
--- ------------------------------------------------------------
+ALTER TABLE `user` MODIFY COLUMN `role` ENUM('student', 'alumni', 'admin', 'advisor', 'company') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'student';
+ALTER TABLE `user` MODIFY COLUMN `email` VARCHAR(191) COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `name` VARCHAR(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ชื่อ-นามสกุล';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `studentId` VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'รหัสนักศึกษา';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `department` VARCHAR(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'สาขาวิชา';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `address` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `phone` VARCHAR(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL;
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `contactPerson` VARCHAR(200) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'ผู้ติดต่อ (สำหรับบริษัท)';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `avatar` TEXT COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'base64 avatar หรือ URL';
+ALTER TABLE `user` ADD COLUMN IF NOT EXISTS `is_active` TINYINT(1) NOT NULL DEFAULT 1;
+
+-- 2. Structure for table `profile`
 CREATE TABLE IF NOT EXISTS `profile` (
   `id` INT(11) NOT NULL AUTO_INCREMENT,
   `profile_id` VARCHAR(13) COLLATE utf8mb4_general_ci NOT NULL,
@@ -54,14 +56,10 @@ CREATE TABLE IF NOT EXISTS `profile` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 3. Structure for VIEW `users` (เพื่อรองรับ backward compatibility กับ backend query เดิม)
--- ------------------------------------------------------------
+-- 3. Structure for VIEW `users`
 CREATE OR REPLACE VIEW `users` AS SELECT * FROM `user`;
 
--- ------------------------------------------------------------
--- 4. Structure for table `requests` (คำร้องฝึกงาน)
--- ------------------------------------------------------------
+-- 4. Structure for table `requests`
 CREATE TABLE IF NOT EXISTS `requests` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `studentId` VARCHAR(50) NOT NULL COMMENT 'รหัสนักศึกษา (อ้างอิงจาก user.studentId)',
@@ -80,9 +78,7 @@ CREATE TABLE IF NOT EXISTS `requests` (
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 5. Structure for table `daily_checkins` (เช็คชื่อรายวัน)
--- ------------------------------------------------------------
+-- 5. Structure for table `daily_checkins`
 CREATE TABLE IF NOT EXISTS `daily_checkins` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `studentId` VARCHAR(50) NOT NULL COMMENT 'รหัสนักศึกษา',
@@ -95,9 +91,7 @@ CREATE TABLE IF NOT EXISTS `daily_checkins` (
   UNIQUE KEY `unique_student_date` (`studentId`, `date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 6. Structure for table `payment_proofs` (หลักฐานการชำระเงิน)
--- ------------------------------------------------------------
+-- 6. Structure for table `payment_proofs`
 CREATE TABLE IF NOT EXISTS `payment_proofs` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `studentId` VARCHAR(50) NOT NULL,
@@ -111,9 +105,7 @@ CREATE TABLE IF NOT EXISTS `payment_proofs` (
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 7. Structure for table `announcements` (ข่าวประกาศ)
--- ------------------------------------------------------------
+-- 7. Structure for table `announcements`
 CREATE TABLE IF NOT EXISTS `announcements` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `title` VARCHAR(500) NOT NULL,
@@ -127,9 +119,7 @@ CREATE TABLE IF NOT EXISTS `announcements` (
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 8. Structure for table `evaluations` (การประเมินโดยบริษัท)
--- ------------------------------------------------------------
+-- 8. Structure for table `evaluations`
 CREATE TABLE IF NOT EXISTS `evaluations` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `requestId` INT NOT NULL,
@@ -152,9 +142,7 @@ CREATE TABLE IF NOT EXISTS `evaluations` (
   CONSTRAINT `fk_evaluations_requestId` FOREIGN KEY (`requestId`) REFERENCES `requests` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 9. Structure for table `advisor_evaluations` (การประเมินโดยอาจารย์ที่ปรึกษา)
--- ------------------------------------------------------------
+-- 9. Structure for table `advisor_evaluations`
 CREATE TABLE IF NOT EXISTS `advisor_evaluations` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `requestId` INT NOT NULL,
@@ -172,17 +160,3 @@ CREATE TABLE IF NOT EXISTS `advisor_evaluations` (
   `createdAt` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT `fk_advisor_evaluations_requestId` FOREIGN KEY (`requestId`) REFERENCES `requests` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- ------------------------------------------------------------
--- Indexes
--- ------------------------------------------------------------
-CREATE INDEX `idx_user_role` ON `user`(`role`);
-CREATE INDEX `idx_user_studentId` ON `user`(`studentId`);
-CREATE INDEX `idx_requests_studentId` ON `requests`(`studentId`);
-CREATE INDEX `idx_requests_status` ON `requests`(`status`);
-CREATE INDEX `idx_daily_checkins_studentId` ON `daily_checkins`(`studentId`);
-CREATE INDEX `idx_daily_checkins_date` ON `daily_checkins`(`date`);
-CREATE INDEX `idx_payment_proofs_studentId` ON `payment_proofs`(`studentId`);
-CREATE INDEX `idx_payment_proofs_status` ON `payment_proofs`(`status`);
-CREATE INDEX `idx_evaluations_requestId` ON `evaluations`(`requestId`);
-CREATE INDEX `idx_advisor_evaluations_requestId` ON `advisor_evaluations`(`requestId`);
