@@ -7,7 +7,15 @@ const { parseRequestRow } = require('../utils/helpers');
 // Helper to handle single request fetching
 const handleGetSingleRequest = async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    const [rows] = await pool.query(`
+      SELECT r.*, 
+             IF(e.id IS NOT NULL, true, false) AS hasCompanyEval,
+             IF(ae.id IS NOT NULL, true, false) AS hasAdvisorEval
+      FROM requests r
+      LEFT JOIN evaluations e ON r.id = e.requestId
+      LEFT JOIN advisor_evaluations ae ON r.id = ae.requestId
+      WHERE r.id = ?
+    `, [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลคำร้อง' });
     res.json({ success: true, data: parseRequestRow(rows[0]) });
   } catch (error) {
