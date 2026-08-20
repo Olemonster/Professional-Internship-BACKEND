@@ -57,14 +57,14 @@ app.get('/api/health', async (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/requests', requestRoutes);
-app.use('/api', requestRoutes);
+app.use('/api/public/requests', requestRoutes);
 app.use('/api/checkins', checkinRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/payment-proofs', paymentRoutes);
-app.use('/api', evaluationRoutes);
-app.use('/api', announcementRoutes);
 app.use('/api/public', companyRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api', evaluationRoutes);
+app.use('/api', announcementRoutes);
 
 // =============================================
 // 404 & Error Handlers
