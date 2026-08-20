@@ -4,8 +4,8 @@ const pool = require('../config/db');
 const { authenticate } = require('../middlewares/auth');
 const { parseRequestRow } = require('../utils/helpers');
 
-// GET /api/public/requests/:id
-router.get('/public/requests/:id', async (req, res) => {
+// Helper to handle single request fetching
+const handleGetSingleRequest = async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลคำร้อง' });
@@ -13,34 +13,9 @@ router.get('/public/requests/:id', async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
-});
+};
 
-// PATCH /api/public/requests/:id/status
-router.patch('/public/requests/:id/status', async (req, res) => {
-  try {
-    const { status, company_comment } = req.body;
-    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลคำร้อง' });
-
-    const updates = ['status = ?'];
-    const params = [status];
-
-    if (company_comment) {
-      updates.push('company_comment = ?');
-      params.push(company_comment);
-    }
-
-    params.push(req.params.id);
-    await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
-
-    const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
-    res.json({ success: true, message: 'อัปเดตสถานะสำเร็จ', data: parseRequestRow(updated[0]) });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// GET /api/requests
+// GET /api/requests — ดึงรายการคำร้องทั้งหมด (Authenticated)
 router.get('/', authenticate, async (req, res) => {
   try {
     // Auto-update request statuses
@@ -100,40 +75,40 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/requests/:id
-router.get('/:id', authenticate, async (req, res) => {
-  try {
-    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
-    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
-    res.json({ success: true, data: parseRequestRow(rows[0]) });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+// GET /api/requests/:id AND /api/public/requests/:id
+router.get('/:id', async (req, res, next) => {
+  const isPublic = req.baseUrl.includes('public') || req.originalUrl.includes('public');
+  if (isPublic) {
+    return handleGetSingleRequest(req, res);
   }
+  authenticate(req, res, () => handleGetSingleRequest(req, res));
 });
 
-// POST /api/requests — ส่งคำร้องใหม่
+// POST /api/requests — ยื่นคำร้องใหม่
 router.post('/', authenticate, async (req, res) => {
   try {
     const {
       studentId, studentName, department, company, position,
-      submittedDate, status, details, dispatchLetter
+      submittedDate, details
     } = req.body;
 
+    if (!studentId || !company) {
+      return res.status(400).json({ success: false, message: 'กรุณากรอกข้อมูลสำคัญให้ครบถ้วน' });
+    }
+
+    const detailsStr = typeof details === 'object' ? JSON.stringify(details) : (details || null);
+
     const [result] = await pool.query(
-      `INSERT INTO requests (
-        studentId, studentName, department, company, position,
-        submittedDate, status, details, dispatchLetter
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO requests (studentId, studentName, department, company, position, submittedDate, details, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'รอสถานประกอบการตอบรับ')`,
       [
         studentId,
         studentName || null,
         department || null,
-        company || null,
+        company,
         position || null,
-        submittedDate ? new Date(submittedDate) : new Date(),
-        status || 'รออาจารย์ที่ปรึกษาอนุมัติ',
-        details ? JSON.stringify(details) : null,
-        dispatchLetter ? JSON.stringify(dispatchLetter) : null
+        submittedDate || new Date().toISOString().split('T')[0],
+        detailsStr
       ]
     );
 
@@ -144,85 +119,97 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
-// PUT /api/requests/:id — แก้ไขคำร้อง
+// PATCH /api/requests/:id/status AND /api/public/requests/:id/status
+router.patch('/:id/status', async (req, res) => {
+  const isPublic = req.baseUrl.includes('public') || req.originalUrl.includes('public');
+
+  const updateStatusHandler = async () => {
+    try {
+      const { status, comment, admin_comment, advisor_comment, company_comment } = req.body;
+      const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+      if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+
+      const updates = ['status = ?'];
+      const params = [status];
+
+      const c = comment || admin_comment || advisor_comment || company_comment;
+      if (c) {
+        if (req.user?.role === 'admin' || admin_comment) {
+          updates.push('admin_comment = ?');
+        } else if (req.user?.role === 'advisor' || advisor_comment) {
+          updates.push('advisor_comment = ?');
+        } else {
+          updates.push('company_comment = ?');
+        }
+        params.push(c);
+      }
+
+      params.push(req.params.id);
+      await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
+
+      const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+      res.json({ success: true, message: 'อัปเดตสถานะสำเร็จ', data: parseRequestRow(updated[0]) });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  };
+
+  if (isPublic) {
+    return updateStatusHandler();
+  }
+  authenticate(req, res, updateStatusHandler);
+});
+
+// PATCH /api/requests/:id/appointment
+router.patch('/:id/appointment', authenticate, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const appointmentObj = body.supervisionAppointment || body;
+    const apptStr = typeof appointmentObj === 'object' ? JSON.stringify(appointmentObj) : (appointmentObj || null);
+
+    await pool.query('UPDATE requests SET supervisionAppointment = ? WHERE id = ?', [apptStr, req.params.id]);
+    const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!updated[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+
+    res.json({ success: true, message: 'บันทึกวันนัดหมายสำเร็จ', data: parseRequestRow(updated[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PUT /api/requests/:id
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const {
-      studentName, department, company, position,
-      status, details, dispatchLetter, admin_comment, advisor_comment
-    } = req.body;
+    const { studentId, studentName, department, company, position, status, details, dispatchLetter } = req.body;
+    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
 
-    const allowed = {
-      studentName, department, company, position, status, admin_comment, advisor_comment
-    };
     const updates = [];
     const params = [];
 
-    for (const [k, v] of Object.entries(allowed)) {
-      if (v !== undefined) {
-        updates.push(`\`${k}\` = ?`);
-        params.push(v);
-      }
-    }
+    if (studentId !== undefined) { updates.push('studentId = ?'); params.push(studentId); }
+    if (studentName !== undefined) { updates.push('studentName = ?'); params.push(studentName); }
+    if (department !== undefined) { updates.push('department = ?'); params.push(department); }
+    if (company !== undefined) { updates.push('company = ?'); params.push(company); }
+    if (position !== undefined) { updates.push('position = ?'); params.push(position); }
+    if (status !== undefined) { updates.push('status = ?'); params.push(status); }
 
     if (details !== undefined) {
-      updates.push('`details` = ?');
+      updates.push('details = ?');
       params.push(typeof details === 'object' ? JSON.stringify(details) : details);
     }
     if (dispatchLetter !== undefined) {
-      updates.push('`dispatchLetter` = ?');
+      updates.push('dispatchLetter = ?');
       params.push(typeof dispatchLetter === 'object' ? JSON.stringify(dispatchLetter) : dispatchLetter);
     }
 
-    if (updates.length === 0) {
-      return res.status(400).json({ success: false, message: 'ไม่มีข้อมูลที่ต้องอัปเดต' });
+    if (updates.length > 0) {
+      params.push(req.params.id);
+      await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
     }
 
-    params.push(req.params.id);
-    await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
-
     const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
-    if (!updated[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
-    res.json({ success: true, message: 'อัปเดตคำร้องสำเร็จ', data: parseRequestRow(updated[0]) });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// PATCH /api/requests/:id/status — อัปเดตสถานะคำร้อง
-router.patch('/:id/status', authenticate, async (req, res) => {
-  try {
-    const { status, adminComment, advisorComment, clearAdminComment, clearAdvisorComment } = req.body;
-    if (!status) return res.status(400).json({ success: false, message: 'กรุณาระบุสถานะ' });
-
-    const updates = ['status = ?'];
-    const params = [status];
-
-    if (adminComment !== undefined) { updates.push('admin_comment = ?'); params.push(adminComment); }
-    if (advisorComment !== undefined) { updates.push('advisor_comment = ?'); params.push(advisorComment); }
-    if (clearAdminComment) { updates.push('admin_comment = NULL'); }
-    if (clearAdvisorComment) { updates.push('advisor_comment = NULL'); }
-
-    params.push(req.params.id);
-    await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
-
-    const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
-    res.json({ success: true, message: 'อัปเดตคำร้องสำเร็จ', data: parseRequestRow(updated[0]) });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// PATCH /api/requests/:id/appointment — อัปเดตวันนัดนิเทศ
-router.patch('/:id/appointment', authenticate, async (req, res) => {
-  try {
-    const { date, mode, note } = req.body;
-    const appointmentData = { date, mode, note, updatedAt: new Date().toISOString() };
-    await pool.query(
-      'UPDATE requests SET supervisionAppointment = ? WHERE id = ?',
-      [JSON.stringify(appointmentData), req.params.id]
-    );
-    res.json({ success: true, message: 'อัปเดตวันนัดนิเทศสำเร็จ' });
+    res.json({ success: true, message: 'แก้ไขคำร้องสำเร็จ', data: parseRequestRow(updated[0]) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -231,8 +218,9 @@ router.patch('/:id/appointment', authenticate, async (req, res) => {
 // DELETE /api/requests/:id
 router.delete('/:id', authenticate, async (req, res) => {
   try {
-    const [result] = await pool.query('DELETE FROM requests WHERE id = ?', [req.params.id]);
-    if (result.affectedRows === 0) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+    await pool.query('DELETE FROM advisor_evaluations WHERE requestId = ?', [req.params.id]);
+    await pool.query('DELETE FROM evaluations WHERE requestId = ?', [req.params.id]);
+    await pool.query('DELETE FROM requests WHERE id = ?', [req.params.id]);
     res.json({ success: true, message: 'ลบคำร้องสำเร็จ' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
