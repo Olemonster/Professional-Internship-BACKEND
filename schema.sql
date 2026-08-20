@@ -43,10 +43,6 @@ CREATE TABLE IF NOT EXISTS `profile` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ------------------------------------------------------------
--- 3. Compatibility VIEW `users`
--- ------------------------------------------------------------
-CREATE OR REPLACE VIEW `users` AS SELECT * FROM `user`;
 
 -- ------------------------------------------------------------
 -- 4. Structure for table `requests` (คำร้องฝึกงาน)

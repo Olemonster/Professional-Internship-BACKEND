@@ -33,9 +33,9 @@ async function initDatabase() {
     }
     const adminPassword = await bcrypt.hash('admin123', 10);
     await connection.query(
-      `INSERT IGNORE INTO users (username, email, password, name, role)
-       VALUES (?, ?, ?, ?, 'admin')`,
-      ['admin', 'admin@example.com', adminPassword, 'Admin User']
+      `INSERT IGNORE INTO \`user\` (username, email, password, role)
+       VALUES (?, ?, ?, 'admin')`,
+      ['admin', 'admin@example.com', adminPassword]
     );
     console.log('✅ สร้าง Admin เริ่มต้นสำเร็จ (admin / admin123)');
 
@@ -44,27 +44,27 @@ async function initDatabase() {
 
     // อาจารย์ที่ปรึกษา
     await connection.query(
-      `INSERT IGNORE INTO users (username, email, password, name, role, department) VALUES
-       (?, ?, ?, 'Dr. Advisor', 'advisor', 'สาขาวิชาวิทยาการคอมพิวเตอร์')`,
+      `INSERT IGNORE INTO \`user\` (username, email, password, role, department) VALUES
+       (?, ?, ?, 'advisor', 'สาขาวิชาวิทยาการคอมพิวเตอร์')`,
       ['advisor', 'advisor@example.com', demoPassword]
     );
 
     // นักศึกษาตัวอย่าง
     await connection.query(
-      `INSERT IGNORE INTO users (username, email, password, name, role, studentId, department) VALUES
-       (?, ?, ?, 'สมชาย ใจดี', 'student', '65000001', 'สาขาวิชาวิทยาการคอมพิวเตอร์')`,
+      `INSERT IGNORE INTO \`user\` (username, email, password, role, studentId, department) VALUES
+       (?, ?, ?, 'student', '6610014101', 'สาขาวิชาวิทยาการคอมพิวเตอร์')`,
       ['student1', 'student1@example.com', demoPassword]
     );
     await connection.query(
-      `INSERT IGNORE INTO users (username, email, password, name, role, studentId, department) VALUES
-       (?, ?, ?, 'สมหญิง รักเรียน', 'student', '65000002', 'สาขาวิชาเทคโนโลยีคอมพิวเตอร์และดิจิทัล')`,
+      `INSERT IGNORE INTO \`user\` (username, email, password, role, studentId, department) VALUES
+       (?, ?, ?, 'student', '6610014102', 'สาขาวิชาเทคโนโลยีคอมพิวเตอร์และดิจิทัล')`,
       ['student2', 'student2@example.com', demoPassword]
     );
 
     // บริษัทตัวอย่าง
     await connection.query(
-      `INSERT IGNORE INTO users (username, email, password, name, role, address, phone, contactPerson) VALUES
-       (?, ?, ?, 'บริษัท เทคโนโลยี จำกัด', 'company', '123 ถ.สุขุมวิท กรุงเทพฯ', '021234567', 'คุณสมศักดิ์')`,
+      `INSERT IGNORE INTO \`user\` (username, email, password, role, department) VALUES
+       (?, ?, ?, 'company', 'บริษัท เทคโนโลยี จำกัด')`,
       ['company1', 'company1@example.com', demoPassword]
     );
 
