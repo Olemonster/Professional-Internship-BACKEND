@@ -6,7 +6,7 @@ const initCronJobs = () => {
   cron.schedule('0 0 * * *', async () => {
     console.log('[Cron] Running daily check for internship start dates...');
     try {
-      const [requests] = await pool.query("SELECT id, details FROM requests WHERE status = 'รออาจารย์อนุมัติเริ่มฝึกงาน'");
+      const [requests] = await pool.query("SELECT id, details FROM requests WHERE status IN ('รออาจารย์อนุมัติเริ่มฝึกงาน', 'รอแอดมินอนุมัติเริ่มฝึกงาน', 'รอแอดมินอนุมัติการออกฝึกงาน', 'อนุมัติแล้ว')");
       let updatedCount = 0;
 
       for (const req of requests) {
