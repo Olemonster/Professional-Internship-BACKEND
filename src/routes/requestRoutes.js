@@ -4,6 +4,42 @@ const pool = require('../config/db');
 const { authenticate } = require('../middlewares/auth');
 const { parseRequestRow } = require('../utils/helpers');
 
+// GET /api/public/requests/:id
+router.get('/public/requests/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลคำร้อง' });
+    res.json({ success: true, data: parseRequestRow(rows[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// PATCH /api/public/requests/:id/status
+router.patch('/public/requests/:id/status', async (req, res) => {
+  try {
+    const { status, company_comment } = req.body;
+    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลคำร้อง' });
+
+    const updates = ['status = ?'];
+    const params = [status];
+
+    if (company_comment) {
+      updates.push('company_comment = ?');
+      params.push(company_comment);
+    }
+
+    params.push(req.params.id);
+    await pool.query(`UPDATE requests SET ${updates.join(', ')} WHERE id = ?`, params);
+
+    const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'อัปเดตสถานะสำเร็จ', data: parseRequestRow(updated[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // GET /api/requests
 router.get('/', authenticate, async (req, res) => {
   try {
