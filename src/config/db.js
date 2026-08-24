@@ -21,6 +21,9 @@ const pool = mysql.createPool({
     await conn.query("ALTER TABLE `user` ADD COLUMN `department` VARCHAR(191) DEFAULT NULL").catch(() => {});
     await conn.query("CREATE TABLE IF NOT EXISTS `profile` (`id` INT(11) NOT NULL AUTO_INCREMENT, `profile_id` VARCHAR(191) NOT NULL, `firstname` VARCHAR(100) DEFAULT NULL, `lastname` VARCHAR(100) DEFAULT NULL, `faculty_id` INT(11) DEFAULT 0, `department_id` INT(11) DEFAULT 0, `address` TEXT DEFAULT NULL, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").catch(() => {});
     await conn.query("DROP VIEW IF EXISTS `users`").catch(() => {});
+    // Drop leftover FK constraints from old Prisma schema that reference non-existent tables
+    await conn.query("ALTER TABLE `profile` DROP FOREIGN KEY `profile_faculty_id_fkey`").catch(() => {});
+    await conn.query("ALTER TABLE `profile` DROP FOREIGN KEY `profile_department_id_fkey`").catch(() => {});
     await conn.query("SET GLOBAL max_allowed_packet = 67108864").catch(() => {});
     conn.release();
   } catch (err) {
