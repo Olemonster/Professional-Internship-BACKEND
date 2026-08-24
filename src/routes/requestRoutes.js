@@ -97,7 +97,7 @@ router.post('/', authenticate, async (req, res) => {
   try {
     const {
       studentId, studentName, department, company, position,
-      submittedDate, details
+      submittedDate, details, status
     } = req.body;
 
     if (!studentId || !company) {
@@ -105,10 +105,11 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     const detailsStr = typeof details === 'object' ? JSON.stringify(details) : (details || null);
+    const initialStatus = status || 'รออาจารย์ที่ปรึกษาอนุมัติ';
 
     const [result] = await pool.query(
       `INSERT INTO requests (studentId, studentName, department, company, position, submittedDate, details, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 'รอสถานประกอบการตอบรับ')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         studentId,
         studentName || null,
@@ -116,7 +117,8 @@ router.post('/', authenticate, async (req, res) => {
         company,
         position || null,
         submittedDate || new Date().toISOString().split('T')[0],
-        detailsStr
+        detailsStr,
+        initialStatus
       ]
     );
 
