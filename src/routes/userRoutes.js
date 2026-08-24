@@ -39,7 +39,7 @@ router.get('/', authenticate, async (req, res) => {
 // GET /api/users/:id
 router.get('/:id', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ?`, [req.params.id]);
+    const [rows] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ? GROUP BY u.id`, [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
     res.json({ success: true, data: toFrontendUser(rows[0]) });
   } catch (error) {
@@ -88,7 +88,7 @@ router.post('/', authenticate, authorize('admin'), async (req, res) => {
       );
     }
 
-    const [newUser] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ?`, [result.insertId]);
+    const [newUser] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ? GROUP BY u.id`, [result.insertId]);
     res.status(201).json({ success: true, message: 'สร้างผู้ใช้สำเร็จ', data: toFrontendUser(newUser[0]) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -220,7 +220,7 @@ router.put('/:id', authenticate, async (req, res) => {
       }
     }
 
-    const [updated] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ?`, [req.params.id]);
+    const [updated] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ? GROUP BY u.id`, [req.params.id]);
     res.json({ success: true, message: 'อัปเดตข้อมูลสำเร็จ', data: toFrontendUser(updated[0]) });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

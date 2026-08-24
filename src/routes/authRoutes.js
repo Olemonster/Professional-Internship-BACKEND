@@ -15,7 +15,7 @@ router.post('/login', async (req, res) => {
     }
 
     const [rows] = await pool.query(
-      `${USER_SELECT_SQL} WHERE u.username = ? OR u.email = ?`,
+      `${USER_SELECT_SQL} WHERE u.username = ? OR u.email = ? GROUP BY u.id`,
       [email, email]
     );
     const user = rows[0];
@@ -47,7 +47,7 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', authenticate, async (req, res) => {
   try {
-    const [rows] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ?`, [req.user.id]);
+    const [rows] = await pool.query(`${USER_SELECT_SQL} WHERE u.id = ? GROUP BY u.id`, [req.user.id]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
     res.json({ success: true, user: toFrontendUser(rows[0]) });
   } catch (error) {
