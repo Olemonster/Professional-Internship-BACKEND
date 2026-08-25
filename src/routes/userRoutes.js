@@ -24,9 +24,10 @@ router.get('/', authenticate, async (req, res) => {
     let users = rows.map(toFrontendUser);
 
     if (role === 'student') {
+      const allowedPrefixes = ['66', '67', '68', '69'];
       users = users.filter(student => {
         const code = String(student.student_code || student.studentId || student.username || '').trim();
-        return code.startsWith('66') || code.startsWith('student');
+        return allowedPrefixes.some(prefix => code.startsWith(prefix)) || code.startsWith('student');
       });
     }
 
