@@ -135,12 +135,21 @@ router.patch('/:id/status', async (req, res) => {
 
   const updateStatusHandler = async () => {
     try {
-      const { status, comment, admin_comment, advisor_comment, company_comment } = req.body;
+      const { status, comment, admin_comment, advisor_comment, company_comment, dispatchLetter } = req.body;
       const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
       if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
 
       const updates = ['status = ?'];
       const params = [status];
+
+      if (status === 'ออกฝึกงาน') {
+        updates.push('internship_start_date = IFNULL(internship_start_date, CURDATE())');
+      }
+
+      if (dispatchLetter !== undefined) {
+        updates.push('dispatchLetter = ?');
+        params.push(typeof dispatchLetter === 'object' ? JSON.stringify(dispatchLetter) : dispatchLetter);
+      }
 
       const c = comment || admin_comment || advisor_comment || company_comment;
       if (c) {

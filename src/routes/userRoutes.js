@@ -160,7 +160,7 @@ router.put('/:id', authenticate, async (req, res) => {
     if (!userRows[0]) return res.status(404).json({ success: false, message: 'ไม่พบผู้ใช้' });
     const current = userRows[0];
 
-    const allowedUserKeys = ['username', 'email', 'role', 'isActive'];
+    const allowedUserKeys = ['username', 'email', 'role', 'isActive', 'phone'];
     const userUpdates = [];
     const userParams = [];
 
@@ -198,7 +198,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const profileId = req.body.username || current.username;
-    if (fn !== undefined || ln !== undefined || req.body.address !== undefined || req.body.faculty_id !== undefined || targetDeptId !== undefined) {
+    if (fn !== undefined || ln !== undefined || req.body.address !== undefined || req.body.faculty_id !== undefined || targetDeptId !== undefined || req.body.phone !== undefined) {
       const [pRows] = await pool.query('SELECT id FROM `profile` WHERE profile_id = ?', [profileId]);
       if (pRows.length > 0) {
         const pUpdates = [];
@@ -208,15 +208,16 @@ router.put('/:id', authenticate, async (req, res) => {
         if (req.body.address !== undefined) { pUpdates.push('`address` = ?'); pParams.push(req.body.address); }
         if (req.body.faculty_id !== undefined) { pUpdates.push('`faculty_id` = ?'); pParams.push(req.body.faculty_id); }
         if (targetDeptId !== undefined) { pUpdates.push('`department_id` = ?'); pParams.push(targetDeptId); }
+        if (req.body.phone !== undefined) { pUpdates.push('`phone` = ?'); pParams.push(req.body.phone); }
         if (pUpdates.length > 0) {
           pParams.push(pRows[0].id);
           await pool.query(`UPDATE \`profile\` SET ${pUpdates.join(', ')} WHERE id = ?`, pParams);
         }
       } else {
         await pool.query(
-          `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [profileId, fn || '', ln || '', req.body.faculty_id || 0, targetDeptId || 0, req.body.address || null]
+          `INSERT INTO \`profile\` (profile_id, firstname, lastname, faculty_id, department_id, address, phone)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [profileId, fn || '', ln || '', req.body.faculty_id || 0, targetDeptId || 0, req.body.address || null, req.body.phone || null]
         );
       }
     }

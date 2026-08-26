@@ -6,9 +6,9 @@ const DEPARTMENT_MAP = {
   5: 'สาขาวิชาเทคโนโลยีการเกษตร',
   6: 'สาขาวิชาเทคโนโลยีและนวัตกรรมอาหาร',
   7: 'สาขาวิชาอาชีวอนามัยและความปลอดภัย',
-  8: 'สาขาวิชาวิศวกรรมซอฟต์แวร์',
+  8: 'สาขาวิชาวิศวกรรมซอฟต์แวร์และปัญญาประดิษฐ์',
   9: 'สาขาวิชาวิศวกรรมโลจิสติกส์',
-  10: 'สาขาวิศวกรรมการจัดการอุตสาหกรรมและสิ่งแวดล้อม',
+  10: 'สาขาวิชาวิศวกรรมการจัดการอุตสาหกรรมและสิ่งแวดล้อม',
   11: 'สาขาวิชาการออกแบบผลิตภัณฑ์และนวัตกรรมวัสดุ',
   12: 'สาขาวิชาเทคโนโลยีโยธาและสถาปัตยกรรม',
 };
@@ -64,7 +64,8 @@ const USER_SELECT_SQL = `
          MAX(p.lastname) AS lastname, 
          MAX(p.faculty_id) AS faculty_id, 
          MAX(p.department_id) AS department_id, 
-         MAX(p.address) AS profile_address
+         MAX(p.address) AS profile_address,
+         MAX(p.phone) AS profile_phone
   FROM \`user\` u
   LEFT JOIN \`profile\` p ON (p.profile_id = u.username OR p.profile_id = u.email OR (u.studentId IS NOT NULL AND u.studentId != '' AND p.profile_id = u.studentId))
 `;
