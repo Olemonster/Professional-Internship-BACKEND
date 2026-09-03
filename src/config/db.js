@@ -52,6 +52,8 @@ const pool = mysql.createPool(poolConfig);
         PRIMARY KEY (\`id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `).catch(() => {});
+    await conn.query("ALTER TABLE `companies` ADD COLUMN `department` VARCHAR(255) DEFAULT NULL").catch(() => {});
+    await conn.query("ALTER TABLE `companies` ADD COLUMN `departments` TEXT DEFAULT NULL").catch(() => {});
     await conn.query("DROP VIEW IF EXISTS `users`").catch(() => {});
     // Drop leftover FK constraints from old Prisma schema that reference non-existent tables
     await conn.query("ALTER TABLE `profile` DROP FOREIGN KEY `profile_faculty_id_fkey`").catch(() => {});
@@ -60,6 +62,7 @@ const pool = mysql.createPool(poolConfig);
     await conn.query("ALTER TABLE `daily_checkins` ADD COLUMN `supervisor_name` VARCHAR(255) DEFAULT NULL").catch(() => {});
     await conn.query("ALTER TABLE `daily_checkins` ADD COLUMN `supervisor_comment` TEXT DEFAULT NULL").catch(() => {});
     await conn.query("ALTER TABLE `requests` ADD COLUMN `internship_start_date` DATE DEFAULT NULL").catch(() => {});
+    await conn.query("ALTER TABLE `requests` ADD COLUMN `internship_end_date` DATE DEFAULT NULL").catch(() => {});
     await conn.query("UPDATE `requests` SET `internship_start_date` = DATE(`updated_at`) WHERE `status` = 'ออกฝึกงาน' AND `internship_start_date` IS NULL").catch(() => {});
     await conn.query("SET GLOBAL max_allowed_packet = 67108864").catch(() => {});
     conn.release();

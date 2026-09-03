@@ -43,6 +43,8 @@ router.get('/companies', async (req, res) => {
         benefits: comp.benefits || '',
         imageUrl: comp.imageUrl || null,
         note: comp.note || '',
+        department: comp.department || '',
+        departments: comp.departments || comp.department || '',
         source: 'สถานประกอบการทางการ',
         isOfficial: true,
       });
@@ -72,7 +74,18 @@ router.get('/companies', async (req, res) => {
       if (!companyName) return;
 
       const normName = normalizeCompanyName(companyName);
-      if (map.has(normName)) return; // ถ้ามีในระบบทางการแล้ว ไม่ต้องทับ
+      if (map.has(normName)) {
+        // If official entry exists, add this request's department to the company's list
+        const dept = request.department || rawDetails.department;
+        if (dept) {
+          const comp = map.get(normName);
+          const depts = new Set(comp.departments || []);
+          depts.add(dept);
+          comp.departments = Array.from(depts);
+          comp.department = comp.departments.join(', ');
+        }
+        return;
+      }
 
       const positionStr = request.position || rawDetails.position || '';
       let addressRaw = rawDetails.companyAddress || request.address || '';
@@ -93,12 +106,14 @@ router.get('/companies', async (req, res) => {
 
       const addressStr = typeof addressRaw === 'string' ? addressRaw : '';
       const phoneStr = rawDetails.phone || rawDetails.supervisorPhone || '';
+      const deptStr = request.department || rawDetails.department || '';
 
       if (search) {
         const s = search.toLowerCase();
         const matches = companyName.toLowerCase().includes(s) || 
                         positionStr.toLowerCase().includes(s) || 
-                        addressStr.toLowerCase().includes(s);
+                        addressStr.toLowerCase().includes(s) ||
+                        deptStr.toLowerCase().includes(s);
         if (!matches) return;
       }
 
@@ -115,6 +130,8 @@ router.get('/companies', async (req, res) => {
         positions: positionStr,
         benefits: '',
         imageUrl: rawDetails.imageUrl || null,
+        department: deptStr,
+        departments: deptStr ? [deptStr] : [],
         source: 'จากรุ่นพี่ที่ฝึกงานเสร็จแล้ว',
         isOfficial: false,
       });
@@ -154,12 +171,13 @@ router.post('/companies/import', async (req, res) => {
       const positions = (c.positions || c['ตำแหน่งที่รับ'] || c['ตำแหน่งงาน'] || '').trim();
       const benefits = (c.benefits || c['สวัสดิการ'] || '').trim();
       const note = (c.note || c['หมายเหตุ'] || '').trim();
+      const department = (c.department || c['สาขา'] || c['สาขาวิชา'] || '').trim();
 
       try {
         await pool.query(
-          `INSERT INTO \`companies\` (name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [name, businessType || null, address || null, province || null, contactPerson || null, phone || null, email || null, website || null, positions || null, benefits || null, note || null]
+          `INSERT INTO \`companies\` (name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note, department, departments)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [name, businessType || null, address || null, province || null, contactPerson || null, phone || null, email || null, website || null, positions || null, benefits || null, note || null, department || null, department || null]
         );
         inserted++;
       } catch (err) {
@@ -182,15 +200,18 @@ router.post('/companies/import', async (req, res) => {
 // POST /api/public/companies — เพิ่มสถานประกอบการใหม่ (1 รายการ)
 router.post('/companies', async (req, res) => {
   try {
-    const { name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note, imageUrl } = req.body;
+    const { name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note, imageUrl, department, departments } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'กรุณาระบุชื่อสถานประกอบการ' });
     }
 
+    const deptStr = Array.isArray(departments) ? departments.join(', ') : (department || null);
+    const deptsJson = Array.isArray(departments) ? JSON.stringify(departments) : (departments || deptStr);
+
     const [result] = await pool.query(
-      `INSERT INTO \`companies\` (name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note, imageUrl)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name.trim(), businessType || null, address || null, province || null, contactPerson || null, phone || null, email || null, website || null, positions || null, benefits || null, note || null, imageUrl || null]
+      `INSERT INTO \`companies\` (name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note, imageUrl, department, departments)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [name.trim(), businessType || null, address || null, province || null, contactPerson || null, phone || null, email || null, website || null, positions || null, benefits || null, note || null, imageUrl || null, deptStr, deptsJson]
     );
 
     const [newRow] = await pool.query('SELECT * FROM `companies` WHERE id = ?', [result.insertId]);
@@ -204,15 +225,18 @@ router.post('/companies', async (req, res) => {
 // PUT /api/public/companies/:id — อัปเดตข้อมูลสถานประกอบการ
 router.put('/companies/:id', async (req, res) => {
   try {
-    const { name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note, imageUrl } = req.body;
+    const { name, businessType, address, province, contactPerson, phone, email, website, positions, benefits, note, imageUrl, department, departments } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'กรุณาระบุชื่อสถานประกอบการ' });
     }
 
+    const deptStr = Array.isArray(departments) ? departments.join(', ') : (department || null);
+    const deptsJson = Array.isArray(departments) ? JSON.stringify(departments) : (departments || deptStr);
+
     await pool.query(
-      `UPDATE \`companies\` SET name = ?, businessType = ?, address = ?, province = ?, contactPerson = ?, phone = ?, email = ?, website = ?, positions = ?, benefits = ?, note = ?, imageUrl = ?
+      `UPDATE \`companies\` SET name = ?, businessType = ?, address = ?, province = ?, contactPerson = ?, phone = ?, email = ?, website = ?, positions = ?, benefits = ?, note = ?, imageUrl = ?, department = ?, departments = ?
        WHERE id = ?`,
-      [name.trim(), businessType || null, address || null, province || null, contactPerson || null, phone || null, email || null, website || null, positions || null, benefits || null, note || null, imageUrl || null, req.params.id]
+      [name.trim(), businessType || null, address || null, province || null, contactPerson || null, phone || null, email || null, website || null, positions || null, benefits || null, note || null, imageUrl || null, deptStr, deptsJson, req.params.id]
     );
 
     const [updated] = await pool.query('SELECT * FROM `companies` WHERE id = ?', [req.params.id]);

@@ -135,15 +135,41 @@ router.patch('/:id/status', async (req, res) => {
 
   const updateStatusHandler = async () => {
     try {
-      const { status, comment, admin_comment, advisor_comment, company_comment, dispatchLetter } = req.body;
+      const { status, comment, admin_comment, advisor_comment, company_comment, dispatchLetter, startDate, endDate, internshipTerm } = req.body;
       const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
       if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
 
       const updates = ['status = ?'];
       const params = [status];
 
-      if (status === 'ออกฝึกงาน') {
+      let details = {};
+      if (rows[0].details) {
+        try {
+          details = typeof rows[0].details === 'object' ? rows[0].details : JSON.parse(rows[0].details);
+        } catch (_) {}
+      }
+
+      if (startDate !== undefined) {
+        updates.push('internship_start_date = ?');
+        params.push(startDate || null);
+        details.startDate = startDate;
+      } else if (status === 'ออกฝึกงาน') {
         updates.push('internship_start_date = IFNULL(internship_start_date, CURDATE())');
+      }
+
+      if (endDate !== undefined) {
+        updates.push('internship_end_date = ?');
+        params.push(endDate || null);
+        details.endDate = endDate;
+      }
+
+      if (internshipTerm !== undefined) {
+        details.internshipTerm = internshipTerm;
+      }
+
+      if (startDate !== undefined || endDate !== undefined || internshipTerm !== undefined) {
+        updates.push('details = ?');
+        params.push(JSON.stringify(details));
       }
 
       if (dispatchLetter !== undefined) {
@@ -179,6 +205,40 @@ router.patch('/:id/status', async (req, res) => {
   authenticate(req, res, updateStatusHandler);
 });
 
+// PATCH /api/requests/:id/internship-period — กำหนดวันฝึกงาน (Admin)
+router.patch('/:id/internship-period', authenticate, async (req, res) => {
+  try {
+    const { startDate, endDate, internshipTerm, note } = req.body;
+    const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
+
+    let details = {};
+    if (rows[0].details) {
+      try {
+        details = typeof rows[0].details === 'object' ? rows[0].details : JSON.parse(rows[0].details);
+      } catch (_) {}
+    }
+
+    if (startDate !== undefined) details.startDate = startDate;
+    if (endDate !== undefined) details.endDate = endDate;
+    if (internshipTerm !== undefined) details.internshipTerm = internshipTerm;
+    if (note !== undefined) details.internshipDateNote = note;
+
+    const sDate = startDate || details.startDate || rows[0].internship_start_date || null;
+    const eDate = endDate || details.endDate || rows[0].internship_end_date || null;
+
+    await pool.query(
+      'UPDATE requests SET internship_start_date = ?, internship_end_date = ?, details = ? WHERE id = ?',
+      [sDate, eDate, JSON.stringify(details), req.params.id]
+    );
+
+    const [updated] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
+    res.json({ success: true, message: 'บันทึกกำหนดวันฝึกงานสำเร็จ', data: parseRequestRow(updated[0]) });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // PATCH /api/requests/:id/appointment
 router.patch('/:id/appointment', authenticate, async (req, res) => {
   try {
@@ -199,7 +259,7 @@ router.patch('/:id/appointment', authenticate, async (req, res) => {
 // PUT /api/requests/:id
 router.put('/:id', authenticate, async (req, res) => {
   try {
-    const { studentId, studentName, department, company, position, status, details, dispatchLetter } = req.body;
+    const { studentId, studentName, department, company, position, status, details, dispatchLetter, internship_start_date, internship_end_date } = req.body;
     const [rows] = await pool.query('SELECT * FROM requests WHERE id = ?', [req.params.id]);
     if (!rows[0]) return res.status(404).json({ success: false, message: 'ไม่พบคำร้อง' });
 
@@ -212,6 +272,8 @@ router.put('/:id', authenticate, async (req, res) => {
     if (company !== undefined) { updates.push('company = ?'); params.push(company); }
     if (position !== undefined) { updates.push('position = ?'); params.push(position); }
     if (status !== undefined) { updates.push('status = ?'); params.push(status); }
+    if (internship_start_date !== undefined) { updates.push('internship_start_date = ?'); params.push(internship_start_date); }
+    if (internship_end_date !== undefined) { updates.push('internship_end_date = ?'); params.push(internship_end_date); }
 
     if (details !== undefined) {
       updates.push('details = ?');

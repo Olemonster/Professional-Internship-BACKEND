@@ -117,7 +117,7 @@ async function runSeleniumTests() {
         body: JSON.stringify({
           studentId: 'student6501',
           studentName: 'สมชาย รักเรียน',
-          department: 'สาขาวิชาวิศวกรรมซอฟต์แวร์',
+          department: 'สาขาวิชาวิศวกรรมซอฟต์แวร์และปัญญาประดิษฐ์',
           company: 'Tech Solutions Innovation Co., Ltd.',
           position: 'Full Stack Developer Intern',
           submittedDate: new Date().toISOString(),
@@ -238,7 +238,7 @@ async function runSeleniumTests() {
           studentId: 'student6501',
           studentName: 'สมชาย รักเรียน',
           date: new Date().toISOString().slice(0, 10),
-          department: 'สาขาวิชาวิศวกรรมซอฟต์แวร์',
+          department: 'สาขาวิชาวิศวกรรมซอฟต์แวร์และปัญญาประดิษฐ์',
           slipDataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
           slipFileName: 'internship_fee_slip.png'
         })

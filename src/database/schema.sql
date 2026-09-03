@@ -165,3 +165,27 @@ CREATE TABLE IF NOT EXISTS `advisor_evaluations` (
   INDEX `idx_advisor_evaluations_requestId` (`requestId`),
   CONSTRAINT `fk_advisor_evaluations_requestId` FOREIGN KEY (`requestId`) REFERENCES `requests` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ------------------------------------------------------------
+-- 10. Structure for table `companies` (สถานประกอบการ)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS `companies` (
+  `id` INT(11) NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(255) NOT NULL,
+  `businessType` VARCHAR(255) DEFAULT NULL,
+  `address` TEXT DEFAULT NULL,
+  `province` VARCHAR(100) DEFAULT NULL,
+  `department` VARCHAR(255) DEFAULT NULL COMMENT 'สาขาวิชาที่เกี่ยวข้อง',
+  `departments` TEXT DEFAULT NULL COMMENT 'สาขาวิชาในรูปแบบ JSON หรือ Comma-separated',
+  `contactPerson` VARCHAR(255) DEFAULT NULL,
+  `phone` VARCHAR(100) DEFAULT NULL,
+  `email` VARCHAR(191) DEFAULT NULL,
+  `website` VARCHAR(255) DEFAULT NULL,
+  `positions` TEXT DEFAULT NULL,
+  `benefits` TEXT DEFAULT NULL,
+  `imageUrl` TEXT DEFAULT NULL,
+  `note` TEXT DEFAULT NULL,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
